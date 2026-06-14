@@ -64,13 +64,16 @@ jobs:
 
           cp "$binary" "package/$package/bin/"
           cp -R frontend/dist/. "package/$package/frontend/"
+          if command -v xattr >/dev/null 2>&1; then
+            xattr -cr "package/$package" || true
+          fi
 
           if find "package/$package" \( -name "*.db" -o -name "*.sqlite" -o -name "*.sqlite3" \) | grep -q .; then
             echo "Database files must not be included in release packages."
             exit 1
           fi
 
-          tar -C package -czf "artifacts/$package.tar.gz" "$package"
+          COPYFILE_DISABLE=1 tar -C package -czf "artifacts/$package.tar.gz" "$package"
 
           if command -v shasum >/dev/null 2>&1; then
             shasum -a 256 "artifacts/$package.tar.gz" > "artifacts/$package.tar.gz.sha256"

@@ -79,6 +79,10 @@ rm -rf "$data_dir"
 mkdir -p "$data_dir"
 cp -R "$package_dir/frontend/." "$data_dir/"
 
+if command -v xattr >/dev/null 2>&1; then
+  xattr -cr "$bin_dir/conjure" "$data_dir" 2>/dev/null || true
+fi
+
 printf 'Installed Conjure to %s\n' "$bin_dir/conjure"
 printf 'Installed UI assets to %s\n' "$data_dir"
 printf 'Run: conjure\n'
