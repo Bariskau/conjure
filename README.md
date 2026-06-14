@@ -14,13 +14,13 @@ Detailed product docs and screenshots live in [`docs/index.html`](docs/index.htm
 macOS / Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bariskau/conjure/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Bariskau/conjure/main/scripts/install.sh | sh
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/bariskau/conjure/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/Bariskau/conjure/main/scripts/install.ps1 | iex
 ```
 
 Run the app:

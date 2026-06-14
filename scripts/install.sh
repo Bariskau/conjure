@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-repo="${CONJURE_REPO:-bariskau/conjure}"
+repo="${CONJURE_REPO:-Bariskau/conjure}"
 version="${CONJURE_VERSION:-latest}"
 bin_dir="${CONJURE_BIN_DIR:-$HOME/.local/bin}"
 

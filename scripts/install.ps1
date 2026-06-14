@@ -46,7 +46,7 @@ function Add-BinDirToUserPath {
   $env:Path = "$env:Path;$BinDir"
 }
 
-$repo = if ($env:CONJURE_REPO) { $env:CONJURE_REPO } else { "bariskau/conjure" }
+$repo = if ($env:CONJURE_REPO) { $env:CONJURE_REPO } else { "Bariskau/conjure" }
 $version = if ($env:CONJURE_VERSION) { $env:CONJURE_VERSION } else { "latest" }
 $binDir = if ($env:CONJURE_BIN_DIR) { $env:CONJURE_BIN_DIR } else { Join-Path $env:USERPROFILE ".conjure\bin" }
 $dataDir = Get-FrontendDataDir
