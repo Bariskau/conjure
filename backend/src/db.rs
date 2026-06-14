@@ -341,15 +341,23 @@ impl Database {
     }
 
     pub async fn delete_tool(&self, id: Uuid) -> Result<(), AppError> {
+        let mut transaction = self.pool.begin().await?;
+
+        sqlx::query("DELETE FROM call_logs WHERE tool_id = ?1")
+            .bind(id.to_string())
+            .execute(&mut *transaction)
+            .await?;
+
         let result = sqlx::query("DELETE FROM tools WHERE id = ?1")
             .bind(id.to_string())
-            .execute(&self.pool)
+            .execute(&mut *transaction)
             .await?;
 
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound(format!("tool `{id}`")));
         }
 
+        transaction.commit().await?;
         Ok(())
     }
 
@@ -1158,7 +1166,7 @@ fn log_matches_filter(log: &CallLog, filter: &LogFilter) -> Result<bool, AppErro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::DEFAULT_TIMEOUT_MS;
+    use crate::domain::{DEFAULT_TIMEOUT_MS, ExecutionSource};
 
     #[tokio::test]
     async fn bootstrap_seeds_disabled_debate_tools() {
@@ -1275,6 +1283,61 @@ mod tests {
             .expect("tool exists");
 
         assert_eq!(uncategorized_tool.category, None);
+    }
+
+    #[tokio::test]
+    async fn delete_tool_removes_its_call_logs() {
+        let (_tempdir, database) = bootstrapped_database().await;
+        let tool = database
+            .create_tool(NewTool {
+                name: "delete_log_test".to_string(),
+                description: "delete log test".to_string(),
+                category: Some("Ops".to_string()),
+                script_body: Some("echo ok".to_string()),
+                script_path: None,
+                working_dir: None,
+                working_dir_expose: false,
+                working_dir_required: false,
+                timeout_ms: DEFAULT_TIMEOUT_MS,
+                enabled: true,
+            })
+            .await
+            .expect("tool should save");
+        let now = Utc::now();
+
+        database
+            .insert_call_log(NewCallLog {
+                tool_id: Some(tool.id),
+                tool_name: tool.name.clone(),
+                source: ExecutionSource::ManualTest,
+                params_json: serde_json::json!({ "target": "world" }),
+                stdout: "ok".to_string(),
+                stderr: String::new(),
+                exit_code: Some(0),
+                started_at: now,
+                finished_at: now,
+                duration_ms: 10,
+                status: ExecutionStatus::Success,
+            })
+            .await
+            .expect("call log should save");
+
+        database
+            .delete_tool(tool.id)
+            .await
+            .expect("tool should delete");
+        let logs = database
+            .list_call_logs(LogFilter {
+                tool_id: None,
+                status: None,
+                from: None,
+                to: None,
+                search: None,
+            })
+            .await
+            .expect("logs should load");
+
+        assert!(logs.iter().all(|log| log.tool_name != "delete_log_test"));
     }
 
     #[tokio::test]

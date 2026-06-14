@@ -3,8 +3,11 @@ import { computed } from "vue";
 
 import { formatDuration, formatRelativeTime } from "@/domain/formatters";
 import type { CallLog } from "@/domain/types";
+import type { TextViewerPayload } from "@/domain/viewer";
 
+import AppButton from "@/components/ui/AppButton.vue";
 import AppIcon from "@/components/ui/AppIcon.vue";
+import MarkdownContent from "@/components/ui/MarkdownContent.vue";
 import StatusDot from "@/components/ui/StatusDot.vue";
 
 const props = defineProps<{
@@ -12,9 +15,12 @@ const props = defineProps<{
   expanded: boolean;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   toggle: [];
+  view: [payload: TextViewerPayload];
 }>();
+
+const PARAMETER_PREVIEW_LENGTH = 56;
 
 const relativeStartedAt = computed(() => formatRelativeTime(props.log.started_at));
 const startedAtLabel = computed(() => new Date(props.log.started_at).toLocaleString());
@@ -26,6 +32,39 @@ function statusLabel(status: CallLog["status"]): string {
     error: "Failed",
     timeout: "Timed out",
   }[status];
+}
+
+function parameterValueText(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return JSON.stringify(value, null, 2) ?? String(value);
+}
+
+function shortParameterValue(value: unknown): string {
+  const text = parameterValueText(value);
+  return text.length > PARAMETER_PREVIEW_LENGTH ? `${text.slice(0, PARAMETER_PREVIEW_LENGTH)}...` : text;
+}
+
+function isLongParameterValue(value: unknown): boolean {
+  return parameterValueText(value).length > PARAMETER_PREVIEW_LENGTH;
+}
+
+function viewParameter(name: string, value: unknown): void {
+  emit("view", {
+    title: name,
+    content: parameterValueText(value),
+    markdown: false,
+  });
+}
+
+function viewStdout(): void {
+  emit("view", {
+    title: `${props.log.tool_name} · stdout`,
+    content: props.log.stdout || "(empty)",
+    markdown: true,
+  });
 }
 </script>
 
@@ -53,19 +92,32 @@ function statusLabel(status: CallLog["status"]): string {
         <dt>Parameters</dt>
         <dd>
           <span v-for="(value, key) in log.params_json" :key="key" class="log-row__param">
-            {{ key }}=<strong>{{ value }}</strong>
+            <span class="log-row__param-value">
+              {{ key }}=<strong>{{ shortParameterValue(value) }}</strong>
+            </span>
+            <button
+              v-if="isLongParameterValue(value)"
+              type="button"
+              class="log-row__param-view"
+              @click.stop="viewParameter(String(key), value)"
+            >
+              View
+            </button>
           </span>
         </dd>
       </dl>
 
       <div class="log-row__streams">
         <div>
-          <span>stdout</span>
-          <pre class="scroll">{{ log.stdout || "(empty)" }}</pre>
+          <div class="log-row__stream-head">
+            <span>stdout</span>
+            <AppButton variant="secondary" size="sm" icon="code" @click.stop="viewStdout">Expand</AppButton>
+          </div>
+          <MarkdownContent class="scroll log-row__markdown" :content="log.stdout" />
         </div>
         <div v-if="log.stderr">
           <span class="error">stderr</span>
-          <pre class="scroll error">{{ log.stderr }}</pre>
+          <pre class="scroll error log-row__pre">{{ log.stderr }}</pre>
         </div>
       </div>
     </div>
@@ -165,7 +217,9 @@ dd {
 
 .log-row__param {
   display: inline-flex;
+  align-items: center;
   gap: 4px;
+  max-width: 100%;
   border: 1px solid var(--glass-border);
   border-radius: 999px;
   color: var(--text-secondary);
@@ -173,9 +227,30 @@ dd {
   padding: 3px 9px;
 }
 
+.log-row__param-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .log-row__param strong {
   color: var(--text-primary);
   font-weight: 500;
+}
+
+.log-row__param-view {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 7px;
 }
 
 .log-row__streams {
@@ -183,16 +258,24 @@ dd {
   gap: 12px;
 }
 
+.log-row__stream-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
 .log-row__streams span {
   display: block;
-  margin-bottom: 6px;
   color: var(--text-tertiary);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
 
-pre {
+.log-row__markdown,
+.log-row__pre {
   overflow: auto;
   max-height: 160px;
   margin: 0;
@@ -204,6 +287,13 @@ pre {
   font-size: 12.5px;
   line-height: 1.6;
   padding: 12px 14px;
+}
+
+.log-row__markdown {
+  font-family: var(--font-ui);
+}
+
+.log-row__pre {
   white-space: pre-wrap;
 }
 

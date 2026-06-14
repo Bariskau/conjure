@@ -5,6 +5,7 @@ import { useRouter } from "vue-router";
 import CategoryChip from "@/components/tool/CategoryChip.vue";
 import ToolCard from "@/components/tool/ToolCard.vue";
 import AppButton from "@/components/ui/AppButton.vue";
+import AppModal from "@/components/ui/AppModal.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import type { ToolSummary } from "@/domain/types";
 import { useConjureStore } from "@/stores/conjure";
@@ -12,6 +13,7 @@ import { useConjureStore } from "@/stores/conjure";
 const router = useRouter();
 const store = useConjureStore();
 const activeCategory = ref("All");
+const pendingDeleteTool = ref<ToolSummary | null>(null);
 
 const categoryCounts = computed(() => {
   return store.tools.reduce<Record<string, number>>((counts, tool) => {
@@ -35,6 +37,28 @@ function editTool(tool: ToolSummary): void {
 
 function testTool(tool: ToolSummary): void {
   router.push({ name: "test", params: { toolId: tool.id } });
+}
+
+function requestToolDelete(tool: ToolSummary): void {
+  pendingDeleteTool.value = tool;
+}
+
+function cancelToolDelete(): void {
+  pendingDeleteTool.value = null;
+}
+
+async function confirmToolDelete(): Promise<void> {
+  const tool = pendingDeleteTool.value;
+  if (!tool) {
+    return;
+  }
+
+  try {
+    await store.removeTool(tool.id);
+    pendingDeleteTool.value = null;
+  } catch (error) {
+    store.toast(error instanceof Error ? error.message : "Tool deletion failed", "error");
+  }
 }
 </script>
 
@@ -79,8 +103,24 @@ function testTool(tool: ToolSummary): void {
         @edit="editTool"
         @test="testTool"
         @toggle="store.toggleTool"
+        @delete="requestToolDelete"
       />
     </div>
+
+    <AppModal
+      :open="Boolean(pendingDeleteTool)"
+      title="Delete tool?"
+      :width="440"
+      @close="cancelToolDelete"
+    >
+      <p class="tools-page__delete-message">
+        "{{ pendingDeleteTool?.name }}" and its run history will be permanently removed. This can't be undone.
+      </p>
+      <div class="tools-page__delete-actions">
+        <AppButton variant="tertiary" @click="cancelToolDelete">Cancel</AppButton>
+        <AppButton variant="danger" icon="trash" @click="confirmToolDelete">Delete tool</AppButton>
+      </div>
+    </AppModal>
   </section>
 </template>
 
@@ -126,6 +166,19 @@ p {
   align-items: stretch;
   grid-template-columns: repeat(auto-fill, minmax(var(--tools-grid-min), 1fr));
   gap: 16px;
+}
+
+.tools-page__delete-message {
+  margin: 0 0 22px;
+  color: var(--text-secondary);
+  font-size: 14.5px;
+  text-wrap: pretty;
+}
+
+.tools-page__delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 @media (max-width: 760px) {

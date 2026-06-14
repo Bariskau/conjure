@@ -17,6 +17,7 @@ defineEmits<{
   edit: [tool: ToolSummary];
   test: [tool: ToolSummary];
   toggle: [tool: ToolSummary];
+  delete: [tool: ToolSummary];
 }>();
 
 const hover = ref(false);
@@ -54,6 +55,7 @@ const hover = ref(false);
       <div class="tool-card__actions" :class="{ visible: hover }">
         <AppButton variant="secondary" size="sm" icon="play" @click="$emit('test', tool)">Test</AppButton>
         <AppButton variant="tertiary" size="sm" icon="pencil" @click="$emit('edit', tool)">Edit</AppButton>
+        <AppButton variant="tertiary" size="sm" icon="trash" title="Delete" @click="$emit('delete', tool)" />
         <span class="tool-card__action-spacer" />
         <ToggleSwitch :model-value="tool.enabled" size="sm" aria-label="Toggle tool" @update:model-value="$emit('toggle', tool)" />
       </div>

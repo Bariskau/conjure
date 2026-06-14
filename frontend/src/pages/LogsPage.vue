@@ -3,12 +3,15 @@ import { computed, onMounted, ref, watch } from "vue";
 
 import LogRow from "@/components/log/LogRow.vue";
 import AppButton from "@/components/ui/AppButton.vue";
+import AppModal from "@/components/ui/AppModal.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import FormField from "@/components/ui/FormField.vue";
 import GlassPanel from "@/components/ui/GlassPanel.vue";
+import MarkdownContent from "@/components/ui/MarkdownContent.vue";
 import SelectMenu from "@/components/ui/SelectMenu.vue";
 import StatusDot from "@/components/ui/StatusDot.vue";
 import type { ExecutionStatus, LogFilter } from "@/domain/types";
+import type { TextViewerPayload } from "@/domain/viewer";
 import { useConjureStore } from "@/stores/conjure";
 
 const store = useConjureStore();
@@ -19,6 +22,7 @@ const selectedStatus = ref("all");
 const selectedRange = ref("7d");
 const search = ref("");
 const currentPage = ref(1);
+const viewer = ref<TextViewerPayload | null>(null);
 
 const PAGE_SIZE = 12;
 
@@ -93,6 +97,14 @@ function resetFilters(): void {
 
 function keepPageInBounds(): void {
   currentPage.value = safePage.value;
+}
+
+function showLogViewer(payload: TextViewerPayload): void {
+  viewer.value = payload;
+}
+
+function closeLogViewer(): void {
+  viewer.value = null;
 }
 </script>
 
@@ -184,6 +196,7 @@ function keepPageInBounds(): void {
           :log="log"
           :expanded="openLogId === log.id"
           @toggle="openLogId = openLogId === log.id ? null : log.id"
+          @view="showLogViewer"
         />
       </div>
 
@@ -220,6 +233,11 @@ function keepPageInBounds(): void {
         </div>
       </div>
     </template>
+
+    <AppModal :open="Boolean(viewer)" :title="viewer?.title ?? 'Value'" :width="720" @close="closeLogViewer">
+      <MarkdownContent v-if="viewer?.markdown" class="scroll logs-page__viewer-md" :content="viewer.content" />
+      <pre v-else class="scroll logs-page__viewer-pre">{{ viewer?.content }}</pre>
+    </AppModal>
   </section>
 </template>
 
@@ -406,6 +424,22 @@ h1 {
   cursor: pointer;
   font-weight: 500;
   padding: 9px 16px;
+}
+
+.logs-page__viewer-md,
+.logs-page__viewer-pre {
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.logs-page__viewer-pre {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @media (max-width: 920px) {

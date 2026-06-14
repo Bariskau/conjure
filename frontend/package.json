@@ -13,11 +13,13 @@
   "dependencies": {
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
+    "markdown-it": "^14.2.0",
     "pinia": "^2.3.0",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^25.9.3",
     "@vitejs/plugin-vue": "^5.2.4",
     "autoprefixer": "^10.4.20",

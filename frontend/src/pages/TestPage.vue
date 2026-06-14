@@ -7,6 +7,7 @@ import AppButton from "@/components/ui/AppButton.vue";
 import AppIcon from "@/components/ui/AppIcon.vue";
 import FormField from "@/components/ui/FormField.vue";
 import GlassPanel from "@/components/ui/GlassPanel.vue";
+import MarkdownContent from "@/components/ui/MarkdownContent.vue";
 import SelectMenu from "@/components/ui/SelectMenu.vue";
 import StatusBadge from "@/components/ui/StatusBadge.vue";
 import StatusDot from "@/components/ui/StatusDot.vue";
@@ -189,7 +190,7 @@ function initialValues(tool: ToolDraft): Record<string, unknown> {
 
           <template v-else>
             <p v-if="running" class="line-in">$ conjure run {{ draft.name }}</p>
-            <pre v-if="result?.stdout" class="line-in stdout">{{ result.stdout }}</pre>
+            <MarkdownContent v-if="result?.stdout" class="line-in stdout test-page__stdout-md" :content="result.stdout" />
             <pre v-if="result?.stderr" class="line-in stderr">{{ result.stderr }}</pre>
             <span v-if="running" class="pulse-dot test-page__cursor" />
           </template>
@@ -406,6 +407,10 @@ pre,
 
 .stdout {
   color: var(--text-secondary);
+}
+
+.test-page__stdout-md {
+  font-family: var(--font-ui);
 }
 
 .stderr {
