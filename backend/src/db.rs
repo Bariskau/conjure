@@ -1132,23 +1132,44 @@ mod tests {
     use crate::domain::DEFAULT_TIMEOUT_MS;
 
     #[tokio::test]
-    async fn bootstrap_seeds_default_ai_tools() {
+    async fn bootstrap_seeds_disabled_debate_tools() {
         let (_tempdir, database) = bootstrapped_database().await;
 
-        let debate_tool = database
-            .get_tool_by_name("ai_cli_debate")
+        let claude_tool = database
+            .get_tool_by_name("claude_debate")
             .await
             .expect("load tool")
-            .expect("seeded debate tool");
-        let doctor_tool = database
-            .get_tool_by_name("ai_cli_doctor")
+            .expect("seeded claude debate tool");
+        let codex_tool = database
+            .get_tool_by_name("codex_debate")
             .await
             .expect("load tool")
-            .expect("seeded doctor tool");
+            .expect("seeded codex debate tool");
 
-        assert_eq!(debate_tool.category.as_deref(), Some("AI"));
-        assert_eq!(debate_tool.parameters[0].name, "topic");
-        assert_eq!(doctor_tool.parameters.len(), 0);
+        assert_eq!(claude_tool.category.as_deref(), Some("AI"));
+        assert_eq!(claude_tool.parameters[0].name, "topic");
+        assert!(
+            !claude_tool
+                .parameters
+                .iter()
+                .any(|param| param.name == "provider")
+        );
+        assert!(!claude_tool.enabled);
+        assert!(!codex_tool.enabled);
+        assert!(
+            database
+                .get_tool_by_name("ai_cli_debate")
+                .await
+                .expect("load legacy tool")
+                .is_none()
+        );
+        assert!(
+            database
+                .get_tool_by_name("gemini_image_generate")
+                .await
+                .expect("load legacy gemini tool")
+                .is_none()
+        );
     }
 
     #[tokio::test]
