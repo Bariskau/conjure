@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "vue-tsc --noEmit && vite build",
-    "lint": "vue-tsc --noEmit",
-    "test": "vue-tsc --noEmit",
+    "build": "vue-tsc -b --noEmit && vite build",
+    "lint": "vue-tsc -b --noEmit",
+    "test": "vue-tsc -b --noEmit",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
