@@ -67,20 +67,25 @@ trap cleanup EXIT INT TERM
 archive="$tmp_dir/$asset"
 package_dir="$tmp_dir/conjure-$target"
 data_dir="$(frontend_data_dir)"
+binary_tmp="$tmp_dir/conjure-bin"
 
 curl -fL "$base_url/$asset" -o "$archive"
 tar -xzf "$archive" -C "$tmp_dir"
 
 mkdir -p "$bin_dir"
-cp "$package_dir/bin/conjure" "$bin_dir/conjure"
-chmod +x "$bin_dir/conjure"
+cp "$package_dir/bin/conjure" "$binary_tmp"
+chmod +x "$binary_tmp"
+if command -v xattr >/dev/null 2>&1; then
+  xattr -cr "$binary_tmp" 2>/dev/null || true
+fi
+mv -f "$binary_tmp" "$bin_dir/conjure"
 
 rm -rf "$data_dir"
 mkdir -p "$data_dir"
 cp -R "$package_dir/frontend/." "$data_dir/"
 
 if command -v xattr >/dev/null 2>&1; then
-  xattr -cr "$bin_dir/conjure" "$data_dir" 2>/dev/null || true
+  xattr -cr "$data_dir" 2>/dev/null || true
 fi
 
 printf 'Installed Conjure to %s\n' "$bin_dir/conjure"
