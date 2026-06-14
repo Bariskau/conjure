@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Conjure — Shell scripts, conjured into MCP tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#E7E6E1; --surface:rgba(255,255,255,0.62); --surface-strong:rgba(255,255,255,0.8);
+  --line:rgba(28,28,30,0.10); --line-strong:rgba(28,28,30,0.16);
+  --ink:#1B1B1D; --sub:#5C5C60; --mut:#9A9AA0;
+  --dark:#1A1A1A; --dark-fg:#FFFFFF;
+  --accent:#BEF264; --accent-fg:#1A1A1A; --accent-deep:#A6E04A;
+  --console:#16181d; --console-fg:#E8E8EC;
+  --r:18px; --rc:10px;
+  --fd:"Space Grotesk",system-ui,sans-serif; --fu:"Inter",system-ui,sans-serif; --fm:"JetBrains Mono",ui-monospace,monospace;
+  --ease:cubic-bezier(0.16,1,0.3,1);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--fu);color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;overflow-x:hidden;line-height:1.55}
+a{color:inherit;text-decoration:none}
+
+/* ambient field */
+.bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:radial-gradient(120% 80% at 50% -10%,#FBFBF9 0%,#EFEEE9 44%,var(--bg) 100%)}
+.bg::before,.bg::after,.bg i{content:"";position:absolute;border-radius:50%;filter:blur(90px)}
+.bg::before{width:64vmax;height:64vmax;left:-10vmax;top:-22vmax;background:radial-gradient(circle,rgba(190,242,100,0.34) 0%,transparent 66%);animation:fa 26s var(--ease) infinite alternate}
+.bg::after{width:54vmax;height:54vmax;right:-12vmax;bottom:-18vmax;background:radial-gradient(circle,rgba(150,180,255,0.22) 0%,transparent 64%);animation:fb 34s var(--ease) infinite alternate}
+.bg i{width:44vmax;height:44vmax;left:46%;top:34%;background:radial-gradient(circle,rgba(255,196,150,0.16) 0%,transparent 62%);animation:fc 40s var(--ease) infinite alternate}
+@keyframes fa{to{transform:translate(5vmax,3vmax) scale(1.1)}}
+@keyframes fb{to{transform:translate(-4vmax,-3vmax) scale(0.94)}}
+@keyframes fc{to{transform:translate(4vmax,-3vmax) scale(1.1)}}
+
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+
+/* glass */
+.glass{background:var(--surface);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 1px 2px rgba(20,20,20,.04),0 18px 40px -22px rgba(20,20,20,.2);position:relative}
+.glass::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;box-shadow:inset 0 1px 0 0 rgba(255,255,255,.9);-webkit-mask:linear-gradient(#000,transparent 45%);mask:linear-gradient(#000,transparent 45%)}
+
+/* nav */
+header{position:sticky;top:0;z-index:50}
+.nav{display:flex;align-items:center;gap:20px;height:64px;margin-top:14px;padding:0 18px;border-radius:999px}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--fd);font-weight:600;font-size:18px;letter-spacing:-0.02em}
+.brand .mk{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:var(--dark);color:#fff}
+.nav .links{display:flex;gap:6px;margin-left:8px}
+.nav .links a{padding:8px 12px;border-radius:8px;font-size:14px;color:var(--sub);transition:.15s}
+.nav .links a:hover{color:var(--ink);background:rgba(0,0,0,.04)}
+.nav .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+@media(max-width:720px){.nav .links{display:none}}
+
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:var(--rc);font-size:14px;font-weight:500;font-family:var(--fu);cursor:pointer;border:1px solid transparent;transition:.16s var(--ease);white-space:nowrap}
+.btn-primary{background:var(--dark);color:#fff}
+.btn-primary:hover{background:#2c2c2c;transform:translateY(-1px)}
+.btn-ghost{background:var(--surface);border-color:var(--line);color:var(--ink)}
+.btn-ghost:hover{border-color:var(--line-strong);background:var(--surface-strong)}
+.btn-lime{background:var(--accent);color:var(--accent-fg)}
+.btn-lime:hover{background:var(--accent-deep);transform:translateY(-1px)}
+.btn-sm{padding:7px 12px;font-size:13px}
+.btn.gh{padding:8px}
+
+/* use cases */
+.cases{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:46px}
+@media(max-width:900px){.cases{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.cases{grid-template-columns:1fr}}
+.case{padding:22px;overflow:hidden;transition:transform .3s var(--ease)}
+.case:hover{transform:translateY(-4px)}
+.case .agent{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--sub);background:rgba(0,0,0,.04);border:1px solid var(--line);padding:4px 11px 4px 5px;border-radius:999px;margin-bottom:15px}
+.case .agent .av{width:18px;height:18px;border-radius:6px;display:grid;place-items:center;font-size:10px;font-weight:700;color:#fff;font-family:var(--fd)}
+.case h3{font-family:var(--fm);font-weight:500;font-size:15.5px;margin:0 0 7px;color:var(--ink)}
+.case p{margin:0 0 18px;color:var(--sub);font-size:14px;min-height:40px}
+.runline{display:flex;align-items:center;gap:10px}
+.rdot{width:8px;height:8px;border-radius:999px;background:var(--accent-deep);flex-shrink:0;animation:pulse 1.5s var(--ease) infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.65)}}
+.rtrack{flex:1;height:4px;border-radius:999px;background:rgba(0,0,0,.07);overflow:hidden}
+.rfill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent-deep));animation:fill 2.8s var(--ease) infinite}
+@keyframes fill{0%{width:6%}55%{width:100%}60%{width:100%;opacity:.5}61%{width:6%;opacity:.5}100%{width:6%;opacity:1}}
+.rstat{font-family:var(--fm);font-size:11px;color:var(--mut);white-space:nowrap}
+
+/* use-case showcase */
+.uc{display:grid;grid-template-columns:300px 1fr;gap:18px;margin-top:46px;align-items:start}
+@media(max-width:860px){.uc{grid-template-columns:1fr}}
+.uc-list{display:flex;flex-direction:column;gap:8px}
+@media(max-width:860px){.uc-list{flex-direction:row;overflow-x:auto;padding-bottom:6px}}
+.uc-item{display:flex;align-items:center;gap:11px;padding:13px 14px;border-radius:14px;border:1px solid var(--line);background:var(--surface);cursor:pointer;transition:.16s var(--ease);text-align:left;white-space:nowrap;font-family:var(--fu)}
+.uc-item:hover{border-color:var(--line-strong);transform:translateY(-1px)}
+.uc-item[aria-selected="true"]{background:var(--surface-strong);border-color:transparent;box-shadow:0 0 0 1.5px var(--accent-deep),0 10px 24px -16px rgba(20,20,20,.3)}
+.uc-item .av{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-family:var(--fd);font-weight:700;font-size:13px;color:#fff;flex-shrink:0}
+.uc-item .nm{font-family:var(--fm);font-size:13.5px;font-weight:500;color:var(--ink);display:block}
+.uc-item .tg{font-size:12px;color:var(--mut)}
+.uc-panel{padding:0;overflow:hidden;display:flex;flex-direction:column;min-height:440px}
+.uc-prompt{display:flex;gap:12px;padding:20px 22px;align-items:flex-start}
+.uc-prompt .who{width:30px;height:30px;border-radius:9px;flex-shrink:0;display:grid;place-items:center;font-family:var(--fd);font-weight:700;font-size:13px;color:#fff}
+.uc-prompt .msg{font-size:15.5px;color:var(--ink);line-height:1.5}
+.uc-prompt .msg b{color:var(--mut);font-weight:500;font-size:12px;display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em}
+.uc-call{padding:13px 22px;font-family:var(--fm);font-size:12.5px;color:var(--sub);border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:rgba(0,0,0,.025);white-space:pre-wrap;word-break:break-word}
+.uc-call .fl{color:var(--accent-deep)}
+.uc-out{background:var(--console);color:#e8e8ec;font-family:var(--fm);font-size:12.5px;line-height:1.85;padding:18px 22px;flex:1}
+.uc-out .l{display:block;opacity:0;transform:translateY(4px);animation:lin .38s var(--ease) forwards}
+.uc-out .sys{color:#9aa0aa}.uc-out .dim{color:#7e828c}.uc-out .ok{color:#bef264;font-weight:500}
+.uc-res{display:flex;align-items:center;gap:14px;padding:13px 22px;background:#0f1115;border-top:1px solid rgba(255,255,255,.08);color:#9aa0aa;font-family:var(--fm);font-size:12.5px;opacity:0;animation:lin .4s var(--ease) forwards}
+.uc-res .ok{color:#bef264;font-weight:600}
+.uc-res .sm{margin-left:auto;font-family:var(--fu);font-size:12px;color:#7e828c}
+
+/* hero */
+.hero{padding:72px 0 40px;text-align:center}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:6px 14px 6px 8px;border-radius:999px;background:var(--surface);border:1px solid var(--line);font-size:13px;color:var(--sub);margin-bottom:26px}
+.pill b{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;background:var(--accent);color:var(--accent-fg);font-weight:600;font-size:11.5px}
+h1{font-family:var(--fd);font-weight:600;font-size:clamp(38px,6.4vw,72px);line-height:1.02;letter-spacing:-0.03em;margin:0 0 22px;text-wrap:balance}
+h1 .em{position:relative;white-space:nowrap}
+h1 .em::after{content:"";position:absolute;left:-2px;right:-2px;bottom:6px;height:24%;background:var(--accent);z-index:-1;border-radius:3px;opacity:.85}
+.lede{font-size:clamp(16px,2vw,20px);color:var(--sub);max-width:620px;margin:0 auto 32px;text-wrap:pretty}
+.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.hero .note{margin-top:16px;font-size:13px;color:var(--mut)}
+
+/* console mock */
+.mock{margin:54px auto 0;max-width:920px;border-radius:var(--r);overflow:hidden}
+.mock .bar{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.mock .dots{display:flex;gap:6px}.mock .dots span{width:10px;height:10px;border-radius:999px;background:var(--line-strong)}
+.mock .bar code{font-family:var(--fm);font-size:12.5px;color:var(--sub)}
+.mock .bar .badge{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#3f7a1e;background:rgba(190,242,100,.3);border:1px solid rgba(120,170,40,.45);padding:3px 10px 3px 8px;border-radius:999px}
+.mock .bar .badge .d{width:8px;height:8px;border-radius:999px;background:#3f7a1e}
+.term{background:var(--console);padding:20px 22px;font-family:var(--fm);font-size:13px;line-height:1.8;color:var(--console-fg);text-align:left;min-height:230px}
+.term .l{display:block;opacity:0;transform:translateY(4px);animation:lin .4s var(--ease) forwards}
+.term .sys{color:#9aa0aa}.term .ok{color:#bef264;font-weight:500}.term .dim{color:#7e828c}
+@keyframes lin{to{opacity:1;transform:none}}
+.term .res{display:flex;align-items:center;gap:16px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.1);color:#9aa0aa}
+.term .res b{color:#bef264;font-weight:600}
+
+/* logos */
+.logos{padding:34px 0 8px;text-align:center}
+.logos p{font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:0 0 16px}
+.logos .row{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.logos .row span{font-family:var(--fd);font-weight:500;font-size:15px;color:var(--sub);padding:7px 14px;border-radius:999px;background:var(--surface);border:1px solid var(--line)}
+
+/* screenshots */
+.shots{margin:48px auto 0;max-width:1000px;display:grid;gap:20px}
+.shot{position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--line-strong);box-shadow:0 2px 6px rgba(20,20,20,.05),0 44px 80px -44px rgba(20,20,20,.5);background:#fff;transition:transform .4s var(--ease),box-shadow .4s var(--ease)}
+.shot:hover{transform:translateY(-5px);box-shadow:0 2px 6px rgba(20,20,20,.05),0 54px 90px -44px rgba(20,20,20,.55)}
+.shot img{display:block;width:100%;height:auto}
+.shot .cap{position:absolute;left:14px;bottom:14px;display:inline-flex;align-items:center;gap:7px;padding:5px 12px 5px 9px;border-radius:999px;background:rgba(20,20,22,.72);color:#fff;font-size:12px;font-weight:500;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.shot .cap b{width:7px;height:7px;border-radius:999px;background:var(--accent)}
+.shots-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:760px){.shots-2{grid-template-columns:1fr}}
+
+/* sections */
+section{padding:72px 0;position:relative;z-index:1}
+.eyebrow{display:inline-block;font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--accent-deep);margin-bottom:14px}
+.h2{font-family:var(--fd);font-weight:600;font-size:clamp(28px,4vw,42px);line-height:1.08;letter-spacing:-0.025em;margin:0 0 16px;text-wrap:balance}
+.sub{font-size:17px;color:var(--sub);max-width:600px;text-wrap:pretty}
+.center{text-align:center}.center .sub{margin:0 auto}
+
+/* steps */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:46px}
+@media(max-width:820px){.steps{grid-template-columns:1fr}}
+.step{padding:26px}
+.step .n{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-family:var(--fm);font-size:14px;font-weight:500;background:var(--dark);color:#fff;margin-bottom:18px}
+.step h3{font-family:var(--fd);font-weight:600;font-size:18px;margin:0 0 8px;letter-spacing:-0.01em}
+.step p{margin:0;color:var(--sub);font-size:14.5px}
+.step pre{margin:16px 0 0;background:var(--console);color:#d6d6dc;font-family:var(--fm);font-size:12px;line-height:1.7;padding:12px 14px;border-radius:10px;overflow:auto;white-space:pre}
+.step .kw{color:#b79dc9}.step .str{color:#a2b58d}.step .var{color:#8aa9c9}.step .com{color:#6e7a71;font-style:italic}
+
+/* connect */
+.connect{margin-top:42px;padding:0;overflow:hidden}
+.connect .top{display:flex;align-items:center;gap:14px;padding:20px 24px}
+.connect .top .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:var(--accent);color:var(--accent-fg);flex-shrink:0}
+.connect .top .ep{margin-left:auto;font-family:var(--fm);font-size:13px;color:var(--sub);background:rgba(0,0,0,.05);padding:7px 12px;border-radius:8px;white-space:nowrap}
+@media(max-width:620px){.connect .top .ep{display:none}}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;padding:16px 24px 4px}
+.tab{padding:7px 13px;border-radius:999px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--line);background:rgba(255,255,255,.5);color:var(--sub);transition:.14s}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-fg);border-color:transparent;font-weight:600}
+.snip{margin:16px 24px 24px;position:relative}
+.snip pre{margin:0;background:var(--console);color:#d6d6dc;font-family:var(--fm);font-size:13px;line-height:1.75;padding:18px 20px;border-radius:12px;overflow:auto;white-space:pre;min-height:96px}
+.snip .copy{position:absolute;top:12px;right:12px}
+
+/* features */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:46px}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.grid{grid-template-columns:1fr}}
+.feat{padding:24px}
+.feat .fi{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:rgba(190,242,100,.28);border:1px solid rgba(120,170,40,.4);color:#3f6a16;margin-bottom:16px}
+.feat h3{font-family:var(--fd);font-weight:600;font-size:16.5px;margin:0 0 7px;letter-spacing:-0.01em}
+.feat p{margin:0;color:var(--sub);font-size:14px}
+
+/* cta band */
+.band{padding:54px;text-align:center;background:var(--dark);border-radius:26px;color:#fff;position:relative;overflow:hidden}
+.band::before{content:"";position:absolute;width:50vmax;height:50vmax;left:50%;top:-30vmax;transform:translateX(-50%);background:radial-gradient(circle,rgba(190,242,100,.3) 0%,transparent 60%);filter:blur(40px)}
+.band h2{font-family:var(--fd);font-weight:600;font-size:clamp(28px,4vw,40px);letter-spacing:-0.025em;margin:0 0 14px;position:relative}
+.band p{color:rgba(255,255,255,.7);font-size:17px;margin:0 0 28px;position:relative}
+.band .cta{position:relative}
+
+/* footer */
+footer{padding:48px 0 60px;position:relative;z-index:1}
+.foot{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-top:28px;border-top:1px solid var(--line);font-size:13.5px;color:var(--mut)}
+.foot .brand{font-size:16px;color:var(--ink)}
+.foot .sp{flex:1}
+.foot a{color:var(--sub)}.foot a:hover{color:var(--ink)}
+
+/* reveal (robust: hidden only when JS ready) */
+.js .reveal{opacity:0;transform:translateY(20px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+.js .reveal.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){.js .reveal{opacity:1;transform:none;transition:none}.bg::before,.bg::after,.bg i{animation:none}.term .l{animation:none;opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="bg"><i></i></div>
+
+<header>
+  <div class="wrap">
+    <nav class="nav glass">
+      <div class="brand"><span class="mk">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3L4 14h6l-1 7 9-11h-6z"/></svg>
+      </span>Conjure</div>
+      <div class="links">
+        <a href="#how">How it works</a>
+        <a href="#connect">Connect</a>
+        <a href="#features">Features</a>
+      </div>
+      <div class="right">
+        <a class="btn btn-ghost btn-sm gh" href="https://github.com/bariskau/conjure" target="_blank" rel="noopener" aria-label="View Conjure on GitHub" title="GitHub">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.26c0 4.5 2.87 8.32 6.84 9.67.5.1.68-.22.68-.49 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.27 2.75 1.05A9.36 9.36 0 0112 6.84c.85 0 1.71.12 2.51.34 1.91-1.32 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.02 10.02 0 0022 12.26C22 6.58 17.52 2 12 2z"/></svg>
+        </a>
+        <a class="btn btn-ghost btn-sm" href="#connect">Docs</a>
+        <a class="btn btn-primary btn-sm" href="#cta">Get started</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <div class="pill"><b>◆ MCP</b> Local-first developer tool</div>
+      <h1>Turn shell scripts into <span class="em">MCP tools</span> your agents can call.</h1>
+      <p class="lede">Conjure wraps any shell script in a typed, validated MCP tool — then runs locally so Claude Code, Cursor, Codex and friends can call it safely, with live output and full run history.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="#cta">Get started — it's local</a>
+        <a class="btn btn-ghost" href="#how">See how it works</a>
+      </div>
+      <div class="note">No cloud. No accounts. Runs on <code style="font-family:var(--fm)">127.0.0.1</code>.</div>
+
+      <div class="mock glass reveal" id="mock">
+        <div class="bar">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <code>deploy-staging · output</code>
+          <span class="badge" id="mockBadge" style="opacity:0;transition:opacity .4s"><span class="d"></span>Success</span>
+        </div>
+        <div class="term" id="term"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="logos wrap">
+    <p>Works with every popular MCP client</p>
+    <div class="row">
+      <span>Claude Code</span><span>Cursor</span><span>Codex</span><span>Windsurf</span><span>Cline</span><span>VS Code</span><span>Zed</span><span>Gemini CLI</span>
+    </div>
+  </div>
+
+  <section id="screens" style="padding-top:48px">
+    <div class="wrap">
+      <div class="center" style="max-width:640px;margin:0 auto">
+        <span class="eyebrow reveal">The app</span>
+        <h2 class="h2 reveal">A calm, precise console for your tools.</h2>
+        <p class="sub reveal">Manage every tool, run it with live streaming output, and audit each call — all running locally.</p>
+      </div>
+      <div class="shots">
+        <div class="shot reveal"><img src="./tools.png" alt="Conjure Tools page — glass card grid of MCP tools" loading="lazy"><span class="cap"><b></b>Tools</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <div class="center" style="max-width:640px;margin:0 auto">
+        <span class="eyebrow reveal">How it works</span>
+        <h2 class="h2 reveal">From script to callable tool in a minute.</h2>
+        <p class="sub reveal">You already have the scripts. Conjure gives them types, guardrails, and a stdio MCP command.</p>
+      </div>
+      <div class="steps">
+        <div class="step glass reveal">
+          <div class="n">1</div>
+          <h3>Paste your script</h3>
+          <p>Drop in any bash script. Conjure keeps it exactly as you wrote it.</p>
+          <pre><span class="com">#!/usr/bin/env bash</span>
+<span class="kw">set</span> -euo pipefail
+<span class="kw">echo</span> <span class="str">"deploying <span class="var">$ENV</span>"</span>
+kubectl apply -f ./<span class="var">$ENV</span></pre>
+        </div>
+        <div class="step glass reveal">
+          <div class="n">2</div>
+          <h3>Define typed params</h3>
+          <p>Add inputs with types, defaults, and validation. They compile to one JSON Schema — the single source of truth.</p>
+          <pre><span class="var">env</span>   <span class="dim">enum</span>  · staging | prod
+<span class="var">tag</span>   <span class="dim">string</span> · default latest
+<span class="var">wait</span>  <span class="dim">bool</span>  · default true</pre>
+        </div>
+        <div class="step glass reveal">
+          <div class="n">3</div>
+          <h3>Call it from your agent</h3>
+          <p>Connect any MCP client and the tool shows up — runs stream live, every call is logged.</p>
+          <pre><span class="dim">agent ›</span> run deploy-staging
+        env=staging tag=v2.1
+<span class="ok">✓ rolled out · exit 0 · 3.8s</span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="cases" style="padding-top:24px">
+    <div class="wrap">
+      <div class="center" style="max-width:640px;margin:0 auto">
+        <span class="eyebrow reveal">Use cases</span>
+        <h2 class="h2 reveal">What people conjure.</h2>
+        <p class="sub reveal">Pick one to see the exact flow — what the agent asks, the call it makes, and what the script streams back.</p>
+      </div>
+      <div class="uc reveal">
+        <div class="uc-list" id="uc-list"></div>
+        <div class="uc-panel glass" id="uc-panel"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="connect" style="padding-top:24px">
+    <div class="wrap">
+      <div class="center" style="max-width:640px;margin:0 auto">
+        <span class="eyebrow reveal">Connect</span>
+        <h2 class="h2 reveal">Install once, connect anywhere.</h2>
+        <p class="sub reveal">Run the UI with <code style="font-family:var(--fm)">conjure</code>, then point your MCP client at <code style="font-family:var(--fm)">conjure --mcp</code>.</p>
+      </div>
+
+      <div class="connect glass reveal">
+        <div class="top">
+          <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 10-5.7-5.7l-1.5 1.5M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 105.7 5.7l1.5-1.5"/></svg></span>
+          <div>
+            <div style="font-family:var(--fd);font-weight:600;font-size:16px">Install and connect</div>
+            <div style="font-size:13px;color:var(--sub);margin-top:2px">Use one installed command for the UI and MCP stdio server.</div>
+          </div>
+          <code class="ep">conjure --mcp</code>
+        </div>
+        <hr style="height:1px;background:var(--line);border:0;margin:0" />
+        <div class="tabs" id="tabs"></div>
+        <div class="snip">
+          <button class="btn btn-ghost btn-sm copy" id="copyBtn">Copy</button>
+          <pre id="snip"></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" style="padding-top:24px">
+    <div class="wrap">
+      <div class="center" style="max-width:640px;margin:0 auto">
+        <span class="eyebrow reveal">Features</span>
+        <h2 class="h2 reveal">Built for running real commands, safely.</h2>
+        <p class="sub reveal">Everything you need to expose scripts to an agent without losing control.</p>
+      </div>
+      <div class="grid" id="features-grid"></div>
+    </div>
+  </section>
+
+  <section id="cta">
+    <div class="wrap">
+      <div class="band reveal">
+        <h2>Conjure your first tool.</h2>
+        <p>Local, typed, and callable from your favorite agent in under a minute.</p>
+        <div class="cta">
+          <a class="btn btn-lime" href="#connect">Get started</a>
+          <a class="btn btn-ghost" href="#how" style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff">Read the docs</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <span class="brand" style="display:flex;align-items:center;gap:8px;font-family:var(--fd);font-weight:600"><span style="width:24px;height:24px;border-radius:7px;display:grid;place-items:center;background:var(--dark);color:#fff"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3L4 14h6l-1 7 9-11h-6z"/></svg></span>Conjure</span>
+      <span class="sp"></span>
+      <a href="#how">How it works</a>
+      <a href="#connect">Connect</a>
+      <a href="#features">Features</a>
+      <span>© 2026 Conjure</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+const AGENTS = {
+  "Install": "# macOS / Linux\ncurl -fsSL https://raw.githubusercontent.com/bariskau/conjure/main/scripts/install.sh | sh\n\n# Windows PowerShell\nirm https://raw.githubusercontent.com/bariskau/conjure/main/scripts/install.ps1 | iex\n\n# start the UI + API\nconjure",
+  "Claude Code": "# after installing conjure\nclaude mcp add conjure -- conjure --mcp",
+  "Cursor": '// ~/.cursor/mcp.json\n{\n  "mcpServers": {\n    "conjure": {\n      "command": "conjure",\n      "args": ["--mcp"]\n    }\n  }\n}',
+  "Codex": '# ~/.codex/config.toml\n[mcp_servers.conjure]\ncommand = "conjure"\nargs = ["--mcp"]',
+  "Windsurf": '// ~/.codeium/windsurf/mcp_config.json\n{\n  "mcpServers": {\n    "conjure": {\n      "command": "conjure",\n      "args": ["--mcp"]\n    }\n  }\n}',
+  "Cline": '// cline_mcp_settings.json\n{\n  "mcpServers": {\n    "conjure": {\n      "command": "conjure",\n      "args": ["--mcp"]\n    }\n  }\n}',
+  "VS Code": '// .vscode/mcp.json\n{\n  "servers": {\n    "conjure": {\n      "type": "stdio",\n      "command": "conjure",\n      "args": ["--mcp"]\n    }\n  }\n}',
+  "Zed": '// settings.json\n"context_servers": {\n  "conjure": {\n    "command": "conjure",\n    "args": ["--mcp"]\n  }\n}',
+  "Gemini CLI": '// ~/.gemini/settings.json\n{\n  "mcpServers": {\n    "conjure": {\n      "command": "conjure",\n      "args": ["--mcp"]\n    }\n  }\n}',
+  "JSON": '{\n  "mcpServers": {\n    "conjure": {\n      "command": "conjure",\n      "args": ["--mcp"]\n    }\n  }\n}'
+};
+const FEATURES = [
+  ["▟","Live streaming console","Watch stdout/stderr stream in real time, with the exit code and duration revealed the moment a run finishes."],
+  ["◇","Typed params + JSON Schema","Inputs compile to one JSON Schema. The same document validates on the client and the server — no drift."],
+  ["▢","Working-directory control","Pin where a script runs, or expose it per call. Required, optional, or locked to a default."],
+  ["≡","Full run history","Every call logged with its parameters, streams, exit code, and timing. Filter and replay."],
+  ["◈","Enable / disable instantly","Flip a tool off and it vanishes from every connected agent. No redeploy."],
+  ["⬡","Local-first & private","Runs entirely on your machine over 127.0.0.1. No cloud, no accounts, no data leaves."]
+];
+
+const USECASES = [
+  { agent:"Claude", av:"C", col:"#C96442", tool:"debate-panel",
+    prompt:"Have GPT-4o, Claude, and Gemini debate whether we should migrate our API to Rust, then give me the consensus.",
+    call:'<span class="fl">./debate-panel.sh</span> "migrate API to Rust" 3',
+    lines:[["fan out prompt to 3 models · 3 rounds","sys"],["→ round 1/3 · collecting opening arguments","dim"],["→ round 2/3 · rebuttals + cross-examination","dim"],["→ round 3/3 · scoring & synthesis","dim"],["✓ consensus: phased migration, hot paths first","ok"]],
+    res:["exit 0","8.4s","returned a ranked transcript + verdict"] },
+  { agent:"Gemini", av:"G", col:"#3B6EA5", tool:"image-generate",
+    prompt:"Generate 3 hero images for the pricing page from this prompt and optimize them for web.",
+    call:'<span class="fl">./image-generate.sh</span> "abstract lime gradient" 3 82',
+    lines:[["calling local diffusion pipeline","sys"],["→ generated 3 candidates (1024×1024)","dim"],["→ encoding to WebP q=82","dim"],["✓ wrote ./public/hero-{1,2,3}.webp","ok"]],
+    res:["exit 0","12.1s","3 files · 240 KB total"] },
+  { agent:"Codex", av:"X", col:"#1A1A1A", tool:"deploy-staging",
+    prompt:"Ship my current branch to staging and tell me when it's live.",
+    call:'<span class="fl">./deploy-staging.sh</span> staging feat-checkout',
+    lines:[["resolved tool · timeout 180s · workdir /srv/app","sys"],["→ applying manifests","dim"],["  deployment.apps/web configured","dim"],["→ waiting for rollout","dim"],["✓ staging now serving feat-checkout","ok"]],
+    res:["exit 0","3.8s","rollout complete · 3/3 pods"] },
+  { agent:"Claude", av:"C", col:"#C96442", tool:"db-backup",
+    prompt:"Back up the production database before I run this migration.",
+    call:'<span class="fl">./db-backup.sh</span> app_prod /backups',
+    lines:[["connecting to app_prod","sys"],["→ pg_dump: reading 142 tables","dim"],["→ compressing (gzip)","dim"],["✓ wrote /backups/app_prod-20260614.sql.gz","ok"]],
+    res:["exit 0","6.7s","2.7 GiB → 410 MiB archive"] },
+  { agent:"Cursor", av:"❖", col:"#1A1A1A", tool:"lighthouse-audit",
+    prompt:"Audit the performance of our landing page and show me the scores.",
+    call:'<span class="fl">./lighthouse-audit.sh</span> https://conjure.dev 3',
+    lines:[["launching headless chrome · 3 runs","sys"],["→ run 1 · run 2 · run 3","dim"],["→ averaging metrics","dim"],["✓ perf 98 · a11y 100 · best 95 · seo 100","ok"]],
+    res:["exit 0","14.9s","median of 3 runs returned as JSON"] },
+  { agent:"Gemini", av:"G", col:"#3B6EA5", tool:"log-triage",
+    prompt:"Our checkout service threw errors around 14:30 — tail the logs and summarize what happened.",
+    call:'<span class="fl">./log-triage.sh</span> checkout 14:25',
+    lines:[["journalctl -u checkout --since 14:25","sys"],["→ pulled 1,284 lines","dim"],["→ clustering errors by stack trace","dim"],["✓ 1 root cause: payment gateway timeout (×37)","ok"]],
+    res:["exit 0","2.3s","summary + offending trace returned"] },
+];
+
+const listEl = document.getElementById('uc-list');
+const panelEl = document.getElementById('uc-panel');
+let ucSel = 0, ucTimers = [];
+function renderList(){
+  listEl.innerHTML = "";
+  USECASES.forEach((c,i)=>{
+    const b = document.createElement('button');
+    b.className = 'uc-item'; b.setAttribute('aria-selected', i===ucSel);
+    b.innerHTML = '<span class="av" style="background:'+c.col+'">'+c.av+'</span><span><span class="nm">'+c.tool+'</span><span class="tg">'+c.agent+'</span></span>';
+    b.onclick = ()=>{ ucSel = i; renderList(); renderPanel(); };
+    listEl.appendChild(b);
+  });
+}
+function renderPanel(){
+  ucTimers.forEach(clearTimeout); ucTimers = [];
+  const c = USECASES[ucSel];
+  panelEl.innerHTML =
+    '<div class="uc-prompt"><span class="who" style="background:'+c.col+'">'+c.av+'</span><div class="msg"><b>'+c.agent+' asks</b>'+c.prompt+'</div></div>'+
+    '<div class="uc-call">$ '+c.call+'</div>'+
+    '<div class="uc-out" id="uc-out"></div>';
+  const out = panelEl.querySelector('#uc-out');
+  let acc = 200;
+  c.lines.forEach((l)=>{
+    const s = document.createElement('span'); s.className = 'l '+l[1]; s.textContent = l[0];
+    s.style.animationDelay = acc + 'ms'; out.appendChild(s); acc += 520;
+  });
+  const r = document.createElement('div'); r.className = 'uc-res'; r.style.animationDelay = (acc+120)+'ms';
+  r.innerHTML = '<span class="ok">'+c.res[0]+'</span><span>·</span><span>'+c.res[1]+'</span><span class="sm">'+c.res[2]+'</span>';
+  out.appendChild(r);
+}
+renderList(); renderPanel();
+
+// tabs
+const tabsEl = document.getElementById('tabs');
+const snipEl = document.getElementById('snip');
+let active = "Install";
+function paint(){
+  tabsEl.innerHTML = "";
+  Object.keys(AGENTS).forEach(name=>{
+    const b = document.createElement('button');
+    b.className = 'tab'; b.textContent = name;
+    b.setAttribute('aria-selected', name===active);
+    b.onclick = ()=>{ active = name; paint(); };
+    tabsEl.appendChild(b);
+  });
+  snipEl.textContent = AGENTS[active];
+}
+paint();
+document.getElementById('copyBtn').onclick = function(){
+  try{ navigator.clipboard.writeText(AGENTS[active]); }catch(e){}
+  this.textContent = "Copied"; setTimeout(()=>this.textContent="Copy",1400);
+};
+
+// features
+const fg = document.getElementById('features-grid');
+FEATURES.forEach(([ic,title,body])=>{
+  const d = document.createElement('div');
+  d.className = 'feat glass reveal';
+  d.innerHTML = '<div class="fi" style="font-family:var(--fm);font-size:18px">'+ic+'</div><h3>'+title+'</h3><p>'+body+'</p>';
+  fg.appendChild(d);
+});
+
+// hero terminal
+const TERM = [
+  ['$ conjure run deploy-staging --env=staging --tag=v2.1','sys'],
+  ['resolved tool deploy-staging · timeout 180s','sys'],
+  ['→ applying manifests','dim'],
+  ['  deployment.apps/web configured','dim'],
+  ['→ waiting for rollout','dim'],
+  ['  deployment "web" successfully rolled out','dim'],
+  ['✓ staging now serving v2.1','ok']
+];
+const term = document.getElementById('term');
+TERM.forEach((l,i)=>{
+  const s = document.createElement('span');
+  s.className = 'l '+l[1]; s.textContent = l[0];
+  s.style.animationDelay = (300 + i*420)+'ms';
+  term.appendChild(s);
+});
+const res = document.createElement('div');
+res.className = 'l res'; res.style.animationDelay = (300 + TERM.length*420 + 200)+'ms';
+res.innerHTML = '<b>exit 0</b><span>·</span><span>3.79s</span><span style="margin-left:auto;font-size:12px">Finished cleanly</span>';
+term.appendChild(res);
+setTimeout(()=>{ document.getElementById('mockBadge').style.opacity = 1; }, 300 + TERM.length*420 + 400);
+
+// reveal
+document.documentElement.classList.add('js');
+const io = new IntersectionObserver((es)=>{
+  es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
+},{threshold:0.12});
+document.querySelectorAll('.reveal').forEach((el,i)=>{ io.observe(el); });
+</script>
+</body>
+</html>

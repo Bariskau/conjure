@@ -1,0 +1,36 @@
+[package]
+name = "backend"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "conjure"
+path = "src/main.rs"
+
+[lints.clippy]
+correctness = "deny"
+suspicious = "warn"
+style = "warn"
+complexity = "warn"
+perf = "warn"
+
+[dependencies]
+anyhow = "1.0.102"
+async-stream = "0.3.6"
+axum = "0.8.9"
+chrono = { version = "0.4.45", features = ["serde"] }
+futures = "0.3.32"
+jsonschema = "0.46.5"
+regex = "1.12.4"
+rmcp = "1.7.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+sqlx = { version = "0.9.0", features = ["runtime-tokio", "sqlite", "chrono", "uuid", "json"] }
+tempfile = "3.27.0"
+thiserror = "2.0.18"
+tokio = { version = "1.52.3", features = ["full"] }
+tokio-stream = { version = "0.1.18", features = ["sync"] }
+tower-http = { version = "0.6.11", features = ["cors", "fs"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+uuid = { version = "1.23.3", features = ["v4", "serde"] }

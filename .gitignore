@@ -1,0 +1,56 @@
+# Build outputs
+target/
+backend/target/
+dist/
+frontend/dist/
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Local agent/workflow state
+.agents/
+.claude/
+.codex/
+openspec/
+skills-lock.json
+.skills-lock.json
+
+# Local databases and runtime state
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
+
+# Environment and logs
+.env
+.env.*
+!.env.example
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test and cache artifacts
+coverage/
+.coverage
+.cache/
+.pytest_cache/
+.turbo/
+.vite/
+.nuxt/
+.output/
+tmp/
+temp/
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,20 @@
+[workspace]
+members = ["backend"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.dev.package."*"]
+opt-level = 3
