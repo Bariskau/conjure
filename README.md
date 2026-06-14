@@ -61,6 +61,25 @@ command = "conjure"
 args = ["--mcp"]
 ```
 
+Long-running tools may also need a client-side MCP timeout. This is separate
+from the timeout set inside Conjure.
+
+Claude Code uses milliseconds:
+
+```bash
+claude mcp add-json conjure '{"type":"stdio","command":"conjure","args":["--mcp"],"timeout":1800000}'
+```
+
+Codex uses seconds:
+
+```toml
+[mcp_servers.conjure]
+command = "conjure"
+args = ["--mcp"]
+startup_timeout_sec = 30
+tool_timeout_sec = 1800
+```
+
 ## Develop
 
 ```bash

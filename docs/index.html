@@ -401,9 +401,9 @@ kubectl apply -f ./<span class="var">$ENV</span></pre>
 <script>
 const AGENTS = {
   "Install": "# macOS / Linux\ncurl -fsSL https://raw.githubusercontent.com/Bariskau/conjure/main/scripts/install.sh | sh\n\n# Windows PowerShell\nirm https://raw.githubusercontent.com/Bariskau/conjure/main/scripts/install.ps1 | iex\n\n# start the UI + API\nconjure",
-  "Claude Code": "# after installing conjure\nclaude mcp add conjure -- conjure --mcp",
+  "Claude Code": "# Claude Code uses milliseconds for tool timeout\nclaude mcp add-json conjure '{\"type\":\"stdio\",\"command\":\"conjure\",\"args\":[\"--mcp\"],\"timeout\":1800000}'",
   "Cursor": '// ~/.cursor/mcp.json\n{\n  "mcpServers": {\n    "conjure": {\n      "command": "conjure",\n      "args": ["--mcp"]\n    }\n  }\n}',
-  "Codex": '# ~/.codex/config.toml\n[mcp_servers.conjure]\ncommand = "conjure"\nargs = ["--mcp"]',
+  "Codex": '# ~/.codex/config.toml\n# Codex uses seconds for tool timeout\n[mcp_servers.conjure]\ncommand = "conjure"\nargs = ["--mcp"]\nstartup_timeout_sec = 30\ntool_timeout_sec = 1800',
   "Windsurf": '// ~/.codeium/windsurf/mcp_config.json\n{\n  "mcpServers": {\n    "conjure": {\n      "command": "conjure",\n      "args": ["--mcp"]\n    }\n  }\n}',
   "Cline": '// cline_mcp_settings.json\n{\n  "mcpServers": {\n    "conjure": {\n      "command": "conjure",\n      "args": ["--mcp"]\n    }\n  }\n}',
   "VS Code": '// .vscode/mcp.json\n{\n  "servers": {\n    "conjure": {\n      "type": "stdio",\n      "command": "conjure",\n      "args": ["--mcp"]\n    }\n  }\n}',
