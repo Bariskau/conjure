@@ -1,7 +1,11 @@
 # Conjure
 
+![Conjure tools UI](docs/tools.png)
+
 Conjure turns local shell scripts into typed MCP tools. The installed `conjure`
 command runs the Vue UI, the local API, and the stdio MCP server.
+
+GitHub Pages: https://bariskau.github.io/conjure/
 
 Detailed product docs and screenshots live in [`docs/index.html`](docs/index.html).
 
