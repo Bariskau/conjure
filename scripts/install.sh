@@ -18,7 +18,8 @@ detect_target() {
       printf '%s\n' "aarch64-apple-darwin"
       ;;
     Darwin:x86_64)
-      printf '%s\n' "x86_64-apple-darwin"
+      printf '%s\n' "Intel macOS is not supported. Use Apple Silicon macOS, Linux x86_64, or Windows x86_64." >&2
+      exit 1
       ;;
     Linux:x86_64 | Linux:amd64)
       printf '%s\n' "x86_64-unknown-linux-gnu"
