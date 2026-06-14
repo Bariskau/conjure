@@ -34,6 +34,9 @@ The UI and API run at `http://127.0.0.1:5174`.
 Release packages do not include a database. On first launch, Conjure creates a
 fresh local SQLite database and seeds two disabled debate templates:
 `claude_debate` and `codex_debate`.
+By default, the database lives in the user's platform data directory, such as
+`~/Library/Application Support/Conjure/conjure.db` on macOS. Set
+`CONJURE_DATABASE_URL` to override it.
 
 ## Connect as MCP
 

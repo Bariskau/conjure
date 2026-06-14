@@ -1,6 +1,11 @@
+use std::path::Path;
+
 use chrono::{DateTime, Utc};
 use serde_json::Value;
-use sqlx::{AssertSqlSafe, Row, SqlitePool, sqlite::SqlitePoolOptions};
+use sqlx::{
+    AssertSqlSafe, Row, SqlitePool,
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+};
 use uuid::Uuid;
 
 use crate::{
@@ -85,6 +90,23 @@ impl Database {
         let pool = SqlitePoolOptions::new()
             .max_connections(5)
             .connect(database_url)
+            .await?;
+
+        Ok(Self { pool })
+    }
+
+    pub async fn connect_path(database_path: impl AsRef<Path>) -> Result<Self, AppError> {
+        let database_path = database_path.as_ref();
+        if let Some(parent) = database_path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+
+        let options = SqliteConnectOptions::new()
+            .filename(database_path)
+            .create_if_missing(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(5)
+            .connect_with(options)
             .await?;
 
         Ok(Self { pool })
@@ -1190,6 +1212,19 @@ mod tests {
         assert_eq!(settings.allowed_base_paths, vec!["/tmp"]);
         assert_eq!(settings.default_timeout_ms, 120_000);
         assert_eq!(settings.mcp_endpoint, "http://127.0.0.1:9999/mcp");
+    }
+
+    #[tokio::test]
+    async fn connect_path_creates_database_parent_directory() {
+        let tempdir = tempfile::tempdir().expect("temp dir");
+        let database_path = tempdir.path().join("nested").join("conjure.db");
+
+        let database = Database::connect_path(&database_path)
+            .await
+            .expect("connect by path");
+        database.bootstrap().await.expect("bootstrap");
+
+        assert!(database_path.exists());
     }
 
     #[tokio::test]
