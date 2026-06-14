@@ -169,7 +169,7 @@ impl Database {
             FROM tools t
             LEFT JOIN call_logs l ON l.tool_id = t.id
             GROUP BY t.id
-            ORDER BY t.updated_at DESC",
+            ORDER BY t.enabled DESC, t.created_at DESC",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -185,7 +185,7 @@ impl Database {
             LEFT JOIN call_logs l ON l.tool_id = t.id
             WHERE t.enabled = 1
             GROUP BY t.id
-            ORDER BY t.name",
+            ORDER BY t.created_at DESC",
         )
         .fetch_all(&self.pool)
         .await?;
