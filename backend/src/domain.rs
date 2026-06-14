@@ -212,8 +212,6 @@ pub struct UpdateParameter {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub default_working_dir: Option<String>,
-    #[serde(default)]
-    pub allowed_base_paths: Vec<String>,
     pub default_timeout_ms: i64,
     pub mcp_endpoint: String,
 }
@@ -221,8 +219,6 @@ pub struct AppSettings {
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpdateSettings {
     pub default_working_dir: Option<String>,
-    #[serde(default)]
-    pub allowed_base_paths: Vec<String>,
     pub default_timeout_ms: Option<i64>,
     pub mcp_endpoint: Option<String>,
 }
@@ -907,10 +903,7 @@ fn resolve_working_dir(
         return Ok(None);
     };
 
-    Ok(Some(canonical_allowed_working_dir(
-        &requested,
-        &settings.allowed_base_paths,
-    )?))
+    Ok(Some(canonical_working_dir(&requested)?))
 }
 
 fn working_dir_argument(params: &Map<String, Value>) -> Result<Option<String>, AppError> {
@@ -934,10 +927,7 @@ pub fn normalize_optional_text(value: Option<&str>) -> Option<String> {
         .map(ToString::to_string)
 }
 
-fn canonical_allowed_working_dir(
-    requested: &str,
-    allowed_base_paths: &[String],
-) -> Result<PathBuf, AppError> {
+fn canonical_working_dir(requested: &str) -> Result<PathBuf, AppError> {
     let requested_path = std::fs::canonicalize(requested).map_err(|error| {
         AppError::Validation(format!(
             "working directory `{requested}` is not accessible: {error}"
@@ -951,38 +941,7 @@ fn canonical_allowed_working_dir(
         )));
     }
 
-    if allowed_base_paths.is_empty() {
-        return Err(AppError::Validation(
-            "no allowed base paths are configured".to_string(),
-        ));
-    }
-
-    let mut has_valid_base = false;
-    for allowed_base in allowed_base_paths {
-        let Some(allowed_base) = normalize_optional_text(Some(allowed_base)) else {
-            continue;
-        };
-
-        let Ok(canonical_base) = std::fs::canonicalize(&allowed_base) else {
-            continue;
-        };
-
-        has_valid_base = true;
-        if requested_path.starts_with(&canonical_base) {
-            return Ok(requested_path);
-        }
-    }
-
-    if has_valid_base {
-        Err(AppError::Validation(format!(
-            "working directory `{}` is outside the allowed base paths",
-            requested_path.display()
-        )))
-    } else {
-        Err(AppError::Validation(
-            "allowed base paths do not contain an accessible directory".to_string(),
-        ))
-    }
+    Ok(requested_path)
 }
 
 fn validate_with_json_schema(tool: &Tool, params: &Value) -> Result<(), AppError> {
@@ -1064,13 +1023,10 @@ fn tool_prefixed_env_name(name: &str) -> String {
 }
 
 pub fn default_settings() -> AppSettings {
-    let current_dir = std::env::current_dir()
-        .ok()
-        .and_then(|path| path.to_str().map(ToString::to_string));
-
     AppSettings {
-        default_working_dir: current_dir.clone(),
-        allowed_base_paths: current_dir.into_iter().collect(),
+        default_working_dir: std::env::current_dir()
+            .ok()
+            .and_then(|path| path.to_str().map(ToString::to_string)),
         default_timeout_ms: DEFAULT_TIMEOUT_MS,
         mcp_endpoint: default_mcp_endpoint(),
     }
@@ -1082,16 +1038,6 @@ pub fn sanitize_settings(settings: UpdateSettings) -> Result<AppSettings, AppErr
 
     Ok(AppSettings {
         default_working_dir: normalize_optional_text(settings.default_working_dir.as_deref()),
-        allowed_base_paths: settings
-            .allowed_base_paths
-            .iter()
-            .filter_map(|path| normalize_optional_text(Some(path)))
-            .fold(Vec::new(), |mut paths, path| {
-                if !paths.iter().any(|existing| same_text(existing, &path)) {
-                    paths.push(path);
-                }
-                paths
-            }),
         default_timeout_ms,
         mcp_endpoint: normalize_optional_text(settings.mcp_endpoint.as_deref())
             .unwrap_or_else(default_mcp_endpoint),
@@ -1106,10 +1052,6 @@ pub fn default_mcp_endpoint() -> String {
 
 pub fn sanitize_category(value: Option<String>) -> Option<String> {
     normalize_optional_text(value.as_deref())
-}
-
-fn same_text(left: &str, right: &str) -> bool {
-    left.eq_ignore_ascii_case(right)
 }
 
 #[cfg(test)]

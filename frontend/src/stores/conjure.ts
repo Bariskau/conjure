@@ -26,7 +26,6 @@ interface ConjureState {
   toasts: ToastMessage[];
 }
 
-const defaultAllowedBasePaths = ["/srv/app", "/var/www", "/backups", "/tmp"];
 const defaultCategoryNames = ["AI", "Deploy", "Database", "Observability", "Media", "Network", "Build"];
 const defaultMcpCommand = "conjure --mcp";
 
@@ -223,7 +222,6 @@ export const useConjureStore = defineStore("conjure", {
 function createDefaultSettings(): AppSettings {
   return {
     default_working_dir: "/srv/app/current",
-    allowed_base_paths: [...defaultAllowedBasePaths],
     default_timeout_ms: DEFAULT_TIMEOUT_MS,
     mcp_endpoint: defaultMcpCommand,
   };
@@ -234,9 +232,6 @@ function withSettingsDefaults(settings: AppSettings): AppSettings {
 
   return {
     default_working_dir: settings.default_working_dir ?? defaults.default_working_dir,
-    allowed_base_paths: settings.allowed_base_paths.length
-      ? settings.allowed_base_paths
-      : defaults.allowed_base_paths,
     default_timeout_ms: settings.default_timeout_ms ?? defaults.default_timeout_ms,
     mcp_endpoint: normalizeMcpCommand(settings.mcp_endpoint ?? defaults.mcp_endpoint),
   };

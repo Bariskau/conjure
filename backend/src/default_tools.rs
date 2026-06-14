@@ -210,115 +210,85 @@ const AI_CLI_DEBATE_PARAMETERS: &[DefaultParameterSpec] = &[
 ];
 
 fn claude_debate_script() -> String {
-    debate_script("claude")
+    format!("{AI_CLI_DEBATE_CLAUDE_SCRIPT}\n{AI_CLI_DEBATE_PROMPT_SCRIPT}")
 }
 
 fn codex_debate_script() -> String {
-    debate_script("codex")
+    format!("{AI_CLI_DEBATE_CODEX_SCRIPT}\n{AI_CLI_DEBATE_PROMPT_SCRIPT}")
 }
 
-fn debate_script(provider: &str) -> String {
-    format!(
-        "{AI_CLI_DEBATE_RUNNER_SCRIPT}\nCONJURE_DEBATE_PROVIDER=\"{provider}\"\n{AI_CLI_DEBATE_MAIN_SCRIPT}"
-    )
-}
-
-const AI_CLI_DEBATE_RUNNER_SCRIPT: &str = r###"#!/usr/bin/env sh
+const AI_CLI_DEBATE_CLAUDE_SCRIPT: &str = r###"#!/usr/bin/env sh
 set -eu
 
-provider_available() {
-  case "$1" in
-    claude)
-      [ -n "${CLAUDE_BIN:-}" ] && [ -x "${CLAUDE_BIN}" ] && return 0
-      command -v claude >/dev/null 2>&1
-      ;;
-    codex)
-      [ -n "${CODEX_BIN:-}" ] && [ -x "${CODEX_BIN}" ] && return 0
-      command -v codex >/dev/null 2>&1 && return 0
-      [ -x "/Applications/Codex.app/Contents/Resources/codex" ]
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
-
-resolve_provider() {
-  requested="${CONJURE_DEBATE_PROVIDER:-}"
-  case "$requested" in
-    claude|codex)
-      if provider_available "$requested"; then
-        printf '%s\n' "$requested"
-        return
-      fi
-      printf 'Requested provider is not available: %s\n' "$requested" >&2
-      exit 127
-      ;;
-    "")
-      printf '%s\n' "Conjure debate provider is not configured." >&2
-      exit 2
-      ;;
-    *)
-      printf 'Unsupported debate provider: %s\n' "$requested" >&2
-      exit 2
-      ;;
-  esac
-}
-
-provider_label() {
-  case "$1" in
-    claude) printf '%s\n' "Claude" ;;
-    codex) printf '%s\n' "Codex CLI" ;;
-  esac
-}
+selected_label="Claude"
 
 claude_bin() {
   if [ -n "${CLAUDE_BIN:-}" ]; then
+    [ -x "${CLAUDE_BIN}" ] || return 1
     printf '%s\n' "$CLAUDE_BIN"
+  elif command -v claude >/dev/null 2>&1; then
+    command -v claude
+  elif [ -n "${HOME:-}" ]; then
+    for candidate in "$HOME"/.npm/_npx/*/node_modules/.bin/claude; do
+      [ -x "$candidate" ] || continue
+      printf '%s\n' "$candidate"
+      return 0
+    done
+    return 1
   else
-    printf '%s\n' "claude"
+    return 1
   fi
 }
+
+run_debate_prompt() {
+  prompt_text="$1"
+  if ! bin="$(claude_bin)"; then
+    printf '%s\n' "Claude CLI is not available." >&2
+    exit 127
+  fi
+
+  if [ -n "${model:-}" ]; then
+    "$bin" -p "$prompt_text" --permission-mode bypassPermissions --model "$model" </dev/null
+  else
+    "$bin" -p "$prompt_text" --permission-mode bypassPermissions </dev/null
+  fi
+}
+"###;
+
+const AI_CLI_DEBATE_CODEX_SCRIPT: &str = r###"#!/usr/bin/env sh
+set -eu
+
+selected_label="Codex CLI"
 
 codex_bin() {
   if [ -n "${CODEX_BIN:-}" ]; then
+    [ -x "${CODEX_BIN}" ] || return 1
     printf '%s\n' "$CODEX_BIN"
   elif command -v codex >/dev/null 2>&1; then
     command -v codex
-  else
+  elif [ -x "/Applications/Codex.app/Contents/Resources/codex" ]; then
     printf '%s\n' "/Applications/Codex.app/Contents/Resources/codex"
-  fi
-}
-
-run_claude_prompt() {
-  prompt_text="$1"
-  bin="$(claude_bin)"
-  if [ -n "${model:-}" ]; then
-    "$bin" -p "$prompt_text" --model "$model"
   else
-    "$bin" -p "$prompt_text"
+    return 1
   fi
 }
 
-run_codex_prompt() {
+run_debate_prompt() {
   prompt_text="$1"
-  bin="$(codex_bin)"
+  if ! bin="$(codex_bin)"; then
+    printf '%s\n' "Codex CLI is not available." >&2
+    exit 127
+  fi
+
   if [ -n "${model:-}" ]; then
-    "$bin" exec --skip-git-repo-check --sandbox read-only --ask-for-approval never --color never -m "$model" "$prompt_text"
+    "$bin" -a never exec --skip-git-repo-check --sandbox read-only --color never -m "$model" "$prompt_text" </dev/null
   else
-    "$bin" exec --skip-git-repo-check --sandbox read-only --ask-for-approval never --color never "$prompt_text"
+    "$bin" -a never exec --skip-git-repo-check --sandbox read-only --color never "$prompt_text" </dev/null
   fi
 }
+"###;
 
-run_provider_prompt() {
-  selected_provider="$1"
-  prompt_text="$2"
-  case "$selected_provider" in
-    claude) run_claude_prompt "$prompt_text" ;;
-    codex) run_codex_prompt "$prompt_text" ;;
-  esac
-}
-
+const AI_CLI_DEBATE_PROMPT_SCRIPT: &str = r###"
 language_instruction() {
   case "${language:-tr}" in
     tr) printf '%s\n' "Respond in Turkish." ;;
@@ -327,9 +297,8 @@ language_instruction() {
     *) printf '%s\n' "Respond in Turkish." ;;
   esac
 }
-"###;
 
-const AI_CLI_DEBATE_MAIN_SCRIPT: &str = r###"topic_text="${topic:-}"
+topic_text="${topic:-}"
 if [ -z "$topic_text" ]; then
   printf '%s\n' "topic is required" >&2
   exit 2
@@ -347,9 +316,6 @@ case "${mode:-critic}" in
     mode_instruction="Red-team Codex's position professionally. Focus on failure modes, hidden risks, and missing evidence."
     ;;
 esac
-
-selected_provider="$(resolve_provider)"
-selected_label="$(provider_label "$selected_provider")"
 
 PROMPT="$(printf '%s\n' \
   "You are ${selected_label} in a structured debate with the primary Codex session." \
@@ -384,5 +350,5 @@ PROMPT="$(printf '%s\n' \
   "## Questions For Codex" \
   "## Suggested Next Move")"
 
-run_provider_prompt "$selected_provider" "$PROMPT"
+run_debate_prompt "$PROMPT"
 "###;

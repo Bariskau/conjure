@@ -110,7 +110,6 @@ export interface ParameterDraft {
 
 export interface AppSettings {
   default_working_dir?: string | null;
-  allowed_base_paths: string[];
   default_timeout_ms: number;
   mcp_endpoint: string;
 }

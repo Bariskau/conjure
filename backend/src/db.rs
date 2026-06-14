@@ -67,7 +67,6 @@ const SCHEMA: &[&str] = &[
     "CREATE TABLE IF NOT EXISTS app_settings (
         id INTEGER PRIMARY KEY CHECK (id = 1),
         default_working_dir TEXT,
-        allowed_base_paths_json TEXT NOT NULL,
         default_timeout_ms INTEGER NOT NULL DEFAULT 30000,
         mcp_endpoint TEXT NOT NULL DEFAULT ''
     )",
@@ -629,7 +628,7 @@ impl Database {
     pub async fn get_settings(&self) -> Result<AppSettings, AppError> {
         let row = sqlx::query(
             "SELECT
-                default_working_dir, allowed_base_paths_json, default_timeout_ms, mcp_endpoint
+                default_working_dir, default_timeout_ms, mcp_endpoint
             FROM app_settings
             WHERE id = 1",
         )
@@ -644,21 +643,18 @@ impl Database {
 
     pub async fn update_settings(&self, payload: UpdateSettings) -> Result<AppSettings, AppError> {
         let settings = sanitize_settings(payload)?;
-        let allowed_base_paths_json = serde_json::to_string(&settings.allowed_base_paths)?;
 
         sqlx::query(
             "INSERT INTO app_settings (
-                id, default_working_dir, allowed_base_paths_json, default_timeout_ms, mcp_endpoint
+                id, default_working_dir, default_timeout_ms, mcp_endpoint
             )
-            VALUES (1, ?1, ?2, ?3, ?4)
+            VALUES (1, ?1, ?2, ?3)
             ON CONFLICT(id) DO UPDATE SET
                 default_working_dir = excluded.default_working_dir,
-                allowed_base_paths_json = excluded.allowed_base_paths_json,
                 default_timeout_ms = excluded.default_timeout_ms,
                 mcp_endpoint = excluded.mcp_endpoint",
         )
         .bind(settings.default_working_dir)
-        .bind(allowed_base_paths_json)
         .bind(settings.default_timeout_ms)
         .bind(settings.mcp_endpoint)
         .execute(&self.pool)
@@ -814,11 +810,10 @@ impl Database {
         let settings = default_settings();
         sqlx::query(
             "INSERT OR IGNORE INTO app_settings (
-                id, default_working_dir, allowed_base_paths_json, default_timeout_ms, mcp_endpoint
-            ) VALUES (1, ?1, ?2, ?3, ?4)",
+                id, default_working_dir, default_timeout_ms, mcp_endpoint
+            ) VALUES (1, ?1, ?2, ?3)",
         )
         .bind(settings.default_working_dir)
-        .bind(serde_json::to_string(&settings.allowed_base_paths)?)
         .bind(settings.default_timeout_ms)
         .bind(settings.mcp_endpoint)
         .execute(&self.pool)
@@ -869,6 +864,8 @@ impl Database {
         )
         .await?;
         self.ensure_column("app_settings", "mcp_endpoint", "TEXT NOT NULL DEFAULT ''")
+            .await?;
+        self.drop_column_if_exists("app_settings", "allowed_base_paths_json")
             .await
     }
 
@@ -883,6 +880,19 @@ impl Database {
         }
 
         let statement = format!("ALTER TABLE {table} ADD COLUMN {column} {definition}");
+        sqlx::query(AssertSqlSafe(statement))
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn drop_column_if_exists(&self, table: &str, column: &str) -> Result<(), AppError> {
+        if !self.column_exists(table, column).await? {
+            return Ok(());
+        }
+
+        let statement = format!("ALTER TABLE {table} DROP COLUMN {column}");
         sqlx::query(AssertSqlSafe(statement))
             .execute(&self.pool)
             .await?;
@@ -1075,9 +1085,6 @@ fn settings_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<AppSettings, AppEr
 
     Ok(AppSettings {
         default_working_dir: row.try_get("default_working_dir")?,
-        allowed_base_paths: serde_json::from_str(
-            &row.try_get::<String, _>("allowed_base_paths_json")?,
-        )?,
         default_timeout_ms: row.try_get("default_timeout_ms")?,
         mcp_endpoint,
     })
@@ -1201,7 +1208,6 @@ mod tests {
         let settings = database
             .update_settings(UpdateSettings {
                 default_working_dir: Some("/tmp".to_string()),
-                allowed_base_paths: vec!["/tmp".to_string()],
                 default_timeout_ms: Some(120_000),
                 mcp_endpoint: Some("http://127.0.0.1:9999/mcp".to_string()),
             })
@@ -1209,7 +1215,6 @@ mod tests {
             .expect("settings should save");
 
         assert_eq!(settings.default_working_dir.as_deref(), Some("/tmp"));
-        assert_eq!(settings.allowed_base_paths, vec!["/tmp"]);
         assert_eq!(settings.default_timeout_ms, 120_000);
         assert_eq!(settings.mcp_endpoint, "http://127.0.0.1:9999/mcp");
     }

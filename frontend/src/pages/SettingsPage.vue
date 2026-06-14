@@ -172,10 +172,7 @@ async function removeCategory(category: string): Promise<void> {
 }
 
 function cloneSettings(settings: AppSettings): AppSettings {
-  return {
-    ...settings,
-    allowed_base_paths: [...settings.allowed_base_paths],
-  };
+  return { ...settings };
 }
 
 function parseToolsExport(contents: string): ToolsExport {
