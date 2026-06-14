@@ -1,6 +1,23 @@
 import type { ParameterDraft, ParameterType, Tool, ToolDraft, ToolParameter, ValidationRules } from "./types";
 
-export const DEFAULT_TIMEOUT_MS = 30_000;
+export const MILLISECONDS_PER_SECOND = 1000;
+export const DEFAULT_TIMEOUT_SECONDS = 30;
+export const MAX_TIMEOUT_SECONDS = 21_600;
+export const DEFAULT_TIMEOUT_MS = DEFAULT_TIMEOUT_SECONDS * MILLISECONDS_PER_SECOND;
+export const MAX_TIMEOUT_MS = MAX_TIMEOUT_SECONDS * MILLISECONDS_PER_SECOND;
+
+export function timeoutSecondsFromMs(timeoutMs: number): number {
+  return Math.round(timeoutMs / MILLISECONDS_PER_SECOND);
+}
+
+export function timeoutMsFromSeconds(value: string | number): number | null {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds)) {
+    return null;
+  }
+
+  return normalizeTimeoutSeconds(seconds) * MILLISECONDS_PER_SECOND;
+}
 
 export function createValidationRules(): ValidationRules {
   return {
@@ -102,4 +119,8 @@ set -euo pipefail
 
 echo "hello from $TOOL_NAME"
 `;
+}
+
+function normalizeTimeoutSeconds(seconds: number): number {
+  return Math.min(MAX_TIMEOUT_SECONDS, Math.max(1, Math.round(seconds)));
 }

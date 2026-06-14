@@ -1,4 +1,5 @@
 import type { CallLog, ExecutionStatus, ToolSummary } from "./types";
+import { timeoutSecondsFromMs } from "./defaults";
 
 export function formatDuration(durationMs: number): string {
   if (durationMs >= 1000) {
@@ -9,8 +10,7 @@ export function formatDuration(durationMs: number): string {
 }
 
 export function formatTimeout(timeoutMs: number): string {
-  const seconds = timeoutMs / 1000;
-  return seconds >= 60 ? `${Math.round(seconds / 60)}m` : `${Math.round(seconds)}s`;
+  return `${timeoutSecondsFromMs(timeoutMs)}s`;
 }
 
 export function formatRelativeTime(value?: string | null): string {

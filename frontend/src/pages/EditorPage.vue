@@ -13,7 +13,7 @@ import GlassPanel from "@/components/ui/GlassPanel.vue";
 import JsonViewer from "@/components/ui/JsonViewer.vue";
 import TextAreaField from "@/components/ui/TextAreaField.vue";
 import ToggleSwitch from "@/components/ui/ToggleSwitch.vue";
-import { createParameterDraft } from "@/domain/defaults";
+import { MAX_TIMEOUT_SECONDS, createParameterDraft, timeoutMsFromSeconds, timeoutSecondsFromMs } from "@/domain/defaults";
 import { buildInputSchema } from "@/domain/schema";
 import type { ParameterDraft, ToolDraft } from "@/domain/types";
 import { useConjureStore } from "@/stores/conjure";
@@ -30,6 +30,7 @@ const toolId = computed(() => route.params.toolId as string | undefined);
 const isNew = computed(() => !toolId.value);
 const schema = computed(() => (draft.value ? buildInputSchema(draft.value) : {}));
 const canSave = computed(() => draft.value != null && hasRequiredBasics(draft.value) && hasValidEnumParameters(draft.value));
+const timeoutSeconds = computed(() => (draft.value ? timeoutSecondsFromMs(draft.value.timeout_ms) : ""));
 
 onMounted(loadDraft);
 watch(toolId, loadDraft);
@@ -97,6 +98,17 @@ function setName(value: string): void {
 function setCategory(category: string): void {
   if (draft.value) {
     draft.value.category = category;
+  }
+}
+
+function setTimeoutSeconds(value: string): void {
+  if (!draft.value || !value.trim()) {
+    return;
+  }
+
+  const timeoutMs = timeoutMsFromSeconds(value);
+  if (timeoutMs != null) {
+    draft.value.timeout_ms = timeoutMs;
   }
 }
 
@@ -243,8 +255,15 @@ function hasValidEnumParameters(value: ToolDraft): boolean {
         <div class="editor-page__execution">
           <div>
             <label>Timeout</label>
-            <FormField v-model="draft.timeout_ms" type="number" mono />
-            <small>milliseconds</small>
+            <FormField
+              :model-value="timeoutSeconds"
+              type="number"
+              mono
+              min="1"
+              :max="MAX_TIMEOUT_SECONDS"
+              @update:model-value="setTimeoutSeconds"
+            />
+            <small>seconds</small>
           </div>
           <div>
             <label>Enabled</label>

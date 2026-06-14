@@ -5,6 +5,7 @@ import AppButton from "@/components/ui/AppButton.vue";
 import FormField from "@/components/ui/FormField.vue";
 import GlassPanel from "@/components/ui/GlassPanel.vue";
 import StatusDot from "@/components/ui/StatusDot.vue";
+import { MAX_TIMEOUT_SECONDS, timeoutMsFromSeconds, timeoutSecondsFromMs } from "@/domain/defaults";
 import type { AppSettings, ToolsExport } from "@/domain/types";
 import { useConjureStore } from "@/stores/conjure";
 
@@ -19,7 +20,6 @@ const defaultCategoryNames = new Set([
   "Network",
   "Build",
 ]);
-const millisecondsPerSecond = 1000;
 const settingsSaveDelayMs = 300;
 const workingDirectorySaveDelayMs = 2000;
 
@@ -38,7 +38,7 @@ const categoryCounts = computed(() => {
   }, {});
 });
 
-const defaultTimeoutSeconds = computed(() => Math.round(settingsDraft.value.default_timeout_ms / millisecondsPerSecond));
+const defaultTimeoutSeconds = computed(() => timeoutSecondsFromMs(settingsDraft.value.default_timeout_ms));
 
 watch(
   () => store.settings,
@@ -106,13 +106,12 @@ function setDefaultTimeout(value: string): void {
     return;
   }
 
-  const seconds = Number(value);
-  if (!Number.isFinite(seconds)) {
+  const timeoutMs = timeoutMsFromSeconds(value);
+  if (timeoutMs == null) {
     return;
   }
 
-  const normalizedSeconds = Math.min(3600, Math.max(1, Math.round(seconds)));
-  settingsDraft.value.default_timeout_ms = normalizedSeconds * millisecondsPerSecond;
+  settingsDraft.value.default_timeout_ms = timeoutMs;
   scheduleSettingsSave();
 }
 
@@ -256,11 +255,11 @@ onBeforeUnmount(() => {
             type="number"
             mono
             min="1"
-            max="3600"
+            :max="MAX_TIMEOUT_SECONDS"
             @update:model-value="setDefaultTimeout"
             @blur="saveSettingsQuietly"
           />
-          <span>sec</span>
+          <span>seconds</span>
         </div>
       </div>
       <hr class="hairline" />

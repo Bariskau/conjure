@@ -8,7 +8,11 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 
-pub const DEFAULT_TIMEOUT_MS: i64 = 30_000;
+pub const MILLISECONDS_PER_SECOND: i64 = 1_000;
+pub const DEFAULT_TIMEOUT_SECONDS: i64 = 30;
+pub const MAX_TIMEOUT_SECONDS: i64 = 21_600;
+pub const DEFAULT_TIMEOUT_MS: i64 = DEFAULT_TIMEOUT_SECONDS * MILLISECONDS_PER_SECOND;
+pub const MAX_TIMEOUT_MS: i64 = MAX_TIMEOUT_SECONDS * MILLISECONDS_PER_SECOND;
 pub const OUTPUT_LIMIT_BYTES: usize = 1_048_576;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -452,12 +456,12 @@ pub fn validate_script_source(
 }
 
 pub fn validate_timeout(timeout_ms: i64) -> Result<(), AppError> {
-    if (1..=3_600_000).contains(&timeout_ms) {
+    if (MILLISECONDS_PER_SECOND..=MAX_TIMEOUT_MS).contains(&timeout_ms) {
         Ok(())
     } else {
-        Err(AppError::Validation(
-            "timeout_ms must be between 1 and 3600000".to_string(),
-        ))
+        Err(AppError::Validation(format!(
+            "timeout must be between 1 and {MAX_TIMEOUT_SECONDS} seconds"
+        )))
     }
 }
 

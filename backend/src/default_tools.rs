@@ -1,6 +1,11 @@
 use serde_json::Value;
 
-use crate::domain::{NewParameter, NewTool, ParameterType, ValidationRules};
+use crate::domain::{
+    MILLISECONDS_PER_SECOND, NewParameter, NewTool, ParameterType, ValidationRules,
+};
+
+const AI_CLI_DEBATE_TIMEOUT_SECONDS: i64 = 30 * 60;
+const AI_CLI_DEBATE_TIMEOUT_MS: i64 = AI_CLI_DEBATE_TIMEOUT_SECONDS * MILLISECONDS_PER_SECOND;
 
 pub fn default_tools() -> Vec<DefaultToolSpec> {
     vec![claude_debate(), codex_debate()]
@@ -135,7 +140,7 @@ fn claude_debate() -> DefaultToolSpec {
         description: "Runs a local Claude CLI debate against Codex on a topic, decision, or proposal.",
         category: "AI",
         script_body: claude_debate_script,
-        timeout_ms: 300_000,
+        timeout_ms: AI_CLI_DEBATE_TIMEOUT_MS,
         working_dir_expose: true,
         enabled: false,
         parameters: AI_CLI_DEBATE_PARAMETERS,
@@ -148,7 +153,7 @@ fn codex_debate() -> DefaultToolSpec {
         description: "Runs a local Codex CLI debate as a second opinion on a topic, decision, or proposal.",
         category: "AI",
         script_body: codex_debate_script,
-        timeout_ms: 300_000,
+        timeout_ms: AI_CLI_DEBATE_TIMEOUT_MS,
         working_dir_expose: true,
         enabled: false,
         parameters: AI_CLI_DEBATE_PARAMETERS,
