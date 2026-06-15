@@ -69,7 +69,7 @@ async function confirmToolDelete(): Promise<void> {
         <h1>Tools</h1>
         <p>Shell scripts, conjured into MCP tools your agents can call.</p>
       </div>
-      <AppButton variant="primary" icon="plus" @click="router.push({ name: 'tool-create' })">New tool</AppButton>
+      <AppButton variant="primary" size="sm" icon="plus" @click="router.push({ name: 'tool-create' })">New tool</AppButton>
     </div>
 
     <div class="scroll tools-page__chips">

@@ -1,4 +1,4 @@
-use std::{convert::Infallible, env, process::Stdio, time::Duration};
+use std::{convert::Infallible, io::Write, process::Stdio, time::Duration};
 
 use axum::response::sse::Event;
 use chrono::Utc;
@@ -149,6 +149,7 @@ async fn execute_plan(
     let ToolCommand {
         mut command,
         summary,
+        _script_file,
     } = command_for_tool(tool)?;
     command.envs(&plan.env);
     if let Some(working_dir) = &plan.working_dir {
@@ -157,6 +158,7 @@ async fn execute_plan(
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
     command.kill_on_drop(true);
+    hide_child_window(&mut command);
 
     let mut child = command.spawn().map_err(|error| {
         AppError::Execution(format!("failed to start command `{summary}`: {error}"))
@@ -215,6 +217,7 @@ async fn execute_plan(
 struct ToolCommand {
     command: Command,
     summary: String,
+    _script_file: Option<tempfile::TempPath>,
 }
 
 fn command_for_tool(tool: &Tool) -> Result<ToolCommand, AppError> {
@@ -223,12 +226,17 @@ fn command_for_tool(tool: &Tool) -> Result<ToolCommand, AppError> {
         .as_deref()
         .filter(|body| !body.trim().is_empty())
     {
+        if cfg!(windows) {
+            return command_for_windows_script_body(script_body);
+        }
+
         let (shell, flag) = script_shell();
         let mut command = Command::new(&shell);
         command.arg(flag).arg(script_body);
         return Ok(ToolCommand {
             command,
             summary: format!("{shell} {flag} {}", command_preview(script_body)),
+            _script_file: None,
         });
     }
 
@@ -240,6 +248,7 @@ fn command_for_tool(tool: &Tool) -> Result<ToolCommand, AppError> {
         return Ok(ToolCommand {
             command: Command::new(script_path),
             summary: script_path.to_string(),
+            _script_file: None,
         });
     }
 
@@ -248,15 +257,53 @@ fn command_for_tool(tool: &Tool) -> Result<ToolCommand, AppError> {
     ))
 }
 
+fn command_for_windows_script_body(script_body: &str) -> Result<ToolCommand, AppError> {
+    const POWERSHELL_UTF8_PRELUDE: &[u8] = br#"$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8NoBom
+[Console]::OutputEncoding = $utf8NoBom
+$OutputEncoding = $utf8NoBom
+"#;
+
+    let mut file = tempfile::Builder::new()
+        .prefix("conjure-")
+        .suffix(".ps1")
+        .tempfile()?;
+    file.write_all(b"\xEF\xBB\xBF")?;
+    file.write_all(POWERSHELL_UTF8_PRELUDE)?;
+    file.write_all(script_body.as_bytes())?;
+    file.flush()?;
+
+    let script_file = file.into_temp_path();
+    let script_path = script_file.to_path_buf();
+    let mut command = Command::new("powershell.exe");
+    command
+        .arg("-NoProfile")
+        .arg("-ExecutionPolicy")
+        .arg("Bypass")
+        .arg("-File")
+        .arg(&script_path);
+
+    Ok(ToolCommand {
+        command,
+        summary: format!(
+            "powershell.exe -NoProfile -ExecutionPolicy Bypass -File {}",
+            script_path.display()
+        ),
+        _script_file: Some(script_file),
+    })
+}
+
+#[cfg(windows)]
+fn hide_child_window(command: &mut Command) {
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn hide_child_window(_command: &mut Command) {}
+
 fn script_shell() -> (String, &'static str) {
-    if cfg!(windows) {
-        (
-            env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string()),
-            "/C",
-        )
-    } else {
-        ("sh".to_string(), "-c")
-    }
+    ("sh".to_string(), "-c")
 }
 
 fn command_preview(command: &str) -> String {
@@ -417,7 +464,7 @@ mod tests {
 
     fn echo_env_script() -> &'static str {
         if cfg!(windows) {
-            "echo %name%"
+            "[Console]::Write($env:name)"
         } else {
             "printf '%s' \"$name\""
         }
@@ -425,15 +472,23 @@ mod tests {
 
     fn sleep_script() -> &'static str {
         if cfg!(windows) {
-            "ping -n 2 127.0.0.1 >NUL"
+            "Start-Sleep -Seconds 1"
         } else {
             "sleep 1"
         }
     }
 
+    fn multiline_script() -> &'static str {
+        if cfg!(windows) {
+            "Write-Output 'first'\r\nWrite-Output 'second'"
+        } else {
+            "printf '%s\n' first\nprintf '%s\n' second"
+        }
+    }
+
     fn large_output_script() -> &'static str {
         if cfg!(windows) {
-            "for /L %i in (1,1,700000) do @echo x"
+            "[Console]::Out.Write(('x' * 1100000))"
         } else {
             "yes x | head -n 700000"
         }
@@ -472,15 +527,18 @@ mod tests {
     }
 
     #[test]
-    fn script_body_uses_native_shell() {
-        let (shell, flag) = script_shell();
+    fn script_body_uses_platform_default_shell() {
+        let tool = test_tool("Write-Output 'ok'", 1_000);
+        let command = command_for_tool(&tool).expect("command");
 
         if cfg!(windows) {
-            assert!(shell.ends_with("cmd.exe") || shell.ends_with("cmd"));
-            assert_eq!(flag, "/C");
+            assert!(
+                command
+                    .summary
+                    .starts_with("powershell.exe -NoProfile -ExecutionPolicy Bypass -File ")
+            );
         } else {
-            assert_eq!(shell, "sh");
-            assert_eq!(flag, "-c");
+            assert!(command.summary.starts_with("sh -c "));
         }
     }
 
@@ -494,6 +552,34 @@ mod tests {
         let result = execute_plan(&tool, &plan, None).await.expect("execution");
 
         assert_eq!(result.stdout.trim_end(), "; echo injected");
+        assert_eq!(result.status, ExecutionStatus::Success);
+    }
+
+    #[tokio::test]
+    async fn script_body_runs_multiple_lines() {
+        let tool = test_tool(multiline_script(), 1_000);
+        let plan = build_execution_plan(&tool, &json!({ "name": "x" }), None, &default_settings())
+            .expect("valid plan");
+
+        let result = execute_plan(&tool, &plan, None).await.expect("execution");
+
+        assert_eq!(result.status, ExecutionStatus::Success);
+        assert_eq!(
+            result.stdout.lines().collect::<Vec<_>>(),
+            ["first", "second"]
+        );
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn windows_script_body_preserves_utf8_output() {
+        let tool = test_tool("[Console]::Write('çğıöşü')", 1_000);
+        let plan = build_execution_plan(&tool, &json!({ "name": "x" }), None, &default_settings())
+            .expect("valid plan");
+
+        let result = execute_plan(&tool, &plan, None).await.expect("execution");
+
+        assert_eq!(result.stdout.trim_end(), "çğıöşü");
         assert_eq!(result.status, ExecutionStatus::Success);
     }
 
@@ -516,7 +602,14 @@ mod tests {
 
         let result = execute_plan(&tool, &plan, None).await.expect("execution");
 
-        assert!(result.stdout_truncated);
+        assert!(
+            result.stdout_truncated,
+            "status={:?} stdout_len={} stderr_len={} stderr={:?}",
+            result.status,
+            result.stdout.len(),
+            result.stderr.len(),
+            result.stderr
+        );
         assert!(result.stdout.len() <= OUTPUT_LIMIT_BYTES);
     }
 }

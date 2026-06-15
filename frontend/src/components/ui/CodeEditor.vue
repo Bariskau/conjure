@@ -316,7 +316,6 @@ const SHELL_FUNCTIONS = new Set([
 .code-editor__textarea {
   resize: none;
   background: transparent;
-  caret-color: var(--text-primary);
   color: transparent;
   -webkit-text-fill-color: transparent;
 }

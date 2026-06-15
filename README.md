@@ -2,8 +2,8 @@
 
 ![Conjure tools UI](docs/tools.png)
 
-Conjure turns local shell scripts into typed MCP tools. The installed `conjure`
-command runs the Vue UI, the local API, and the stdio MCP server.
+Conjure turns local PowerShell or sh scripts into typed MCP tools. The installed
+`conjure` command runs the Vue UI, the local API, and the stdio MCP server.
 
 GitHub Pages: https://bariskau.github.io/conjure/
 
@@ -34,6 +34,9 @@ The UI and API run at `http://127.0.0.1:5174`.
 Release packages do not include a database. On first launch, Conjure creates a
 fresh local SQLite database and seeds two disabled debate templates:
 `claude_debate` and `codex_debate`.
+Those seeded tools use the platform default script shell: PowerShell on Windows
+and `sh` on macOS / Linux. Script-body tools follow the same rule, so Windows
+scripts run through PowerShell instead of `cmd.exe`.
 By default, the database lives in the user's platform data directory, such as
 `~/Library/Application Support/Conjure/conjure.db` on macOS. Set
 `CONJURE_DATABASE_URL` to override it.

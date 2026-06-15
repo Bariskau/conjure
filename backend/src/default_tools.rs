@@ -215,12 +215,295 @@ const AI_CLI_DEBATE_PARAMETERS: &[DefaultParameterSpec] = &[
 ];
 
 fn claude_debate_script() -> String {
-    format!("{AI_CLI_DEBATE_CLAUDE_SCRIPT}\n{AI_CLI_DEBATE_PROMPT_SCRIPT}")
+    if cfg!(windows) {
+        AI_CLI_DEBATE_CLAUDE_WINDOWS_SCRIPT.to_string()
+    } else {
+        format!("{AI_CLI_DEBATE_CLAUDE_SCRIPT}\n{AI_CLI_DEBATE_PROMPT_SCRIPT}")
+    }
 }
 
 fn codex_debate_script() -> String {
-    format!("{AI_CLI_DEBATE_CODEX_SCRIPT}\n{AI_CLI_DEBATE_PROMPT_SCRIPT}")
+    if cfg!(windows) {
+        AI_CLI_DEBATE_CODEX_WINDOWS_SCRIPT.to_string()
+    } else {
+        format!("{AI_CLI_DEBATE_CODEX_SCRIPT}\n{AI_CLI_DEBATE_PROMPT_SCRIPT}")
+    }
 }
+
+const AI_CLI_DEBATE_CODEX_WINDOWS_SCRIPT: &str = r###"#!powershell
+$ErrorActionPreference = "Stop"
+$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8NoBom
+[Console]::OutputEncoding = $utf8NoBom
+$OutputEncoding = $utf8NoBom
+$selectedLabel = "Codex CLI"
+
+function Test-CliCandidate {
+  param([string] $Path)
+  return ($Path -and ($Path -notmatch "\\WindowsApps\\") -and (Test-Path -LiteralPath $Path -PathType Leaf))
+}
+
+function Get-CodexBin {
+  if (Test-CliCandidate $env:CODEX_BIN) {
+    return $env:CODEX_BIN
+  }
+
+  $candidates = @()
+  if ($env:LOCALAPPDATA) {
+    $bases = @(
+      (Join-Path $env:LOCALAPPDATA "Programs\OpenAI\Codex\bin"),
+      (Join-Path $env:LOCALAPPDATA "OpenAI\Codex\bin")
+    )
+
+    foreach ($base in $bases) {
+      if (Test-Path -LiteralPath $base) {
+        $candidates += Get-ChildItem -LiteralPath $base -Recurse -Filter "codex.exe" -File -ErrorAction SilentlyContinue |
+          Sort-Object LastWriteTime -Descending |
+          Select-Object -ExpandProperty FullName
+      }
+    }
+  }
+
+  if ($env:USERPROFILE) {
+    $base = Join-Path $env:USERPROFILE ".codex\packages\standalone\releases"
+    if (Test-Path -LiteralPath $base) {
+      $candidates += Get-ChildItem -LiteralPath $base -Recurse -Filter "codex.exe" -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -ExpandProperty FullName
+    }
+  }
+
+  $pathCommands = Get-Command "codex.exe" -All -ErrorAction SilentlyContinue
+  foreach ($pathCommand in $pathCommands) {
+    if ($pathCommand.Source) {
+      $candidates += $pathCommand.Source
+    }
+  }
+
+  foreach ($candidate in $candidates) {
+    if (Test-CliCandidate $candidate) {
+      return $candidate
+    }
+  }
+
+  throw "Codex CLI is not available."
+}
+
+function Get-LanguageInstruction {
+  switch ($env:language) {
+    "en" { "Respond in English." }
+    "original" { "Use the most natural language for the request." }
+    default { "Respond in Turkish." }
+  }
+}
+
+if ([string]::IsNullOrWhiteSpace($env:topic)) {
+  [Console]::Error.WriteLine("topic is required")
+  exit 2
+}
+
+$mode = if ([string]::IsNullOrWhiteSpace($env:mode)) { "critic" } else { $env:mode }
+$modeInstruction = "Challenge Codex's current position, identify weak assumptions, and propose stronger alternatives."
+switch ($mode) {
+  "steelman" {
+    $modeInstruction = "First steelman Codex's position, then explain the best opposing argument."
+  }
+  "judge" {
+    $modeInstruction = "Act as a neutral judge. Compare Codex's position with the strongest counter-position and decide what would change your mind."
+  }
+  "red_team" {
+    $modeInstruction = "Red-team Codex's position professionally. Focus on failure modes, hidden risks, and missing evidence."
+  }
+}
+
+$codexPosition = if ([string]::IsNullOrWhiteSpace($env:codex_position)) {
+  "No Codex position was provided. Infer a reasonable target from the topic and clearly state your assumption."
+} else {
+  $env:codex_position
+}
+$contextText = if ([string]::IsNullOrWhiteSpace($env:context)) {
+  "No additional context was provided."
+} else {
+  $env:context
+}
+
+$prompt = @"
+You are $selectedLabel in a structured debate with the primary Codex session.
+$(Get-LanguageInstruction)
+
+Debate mode:
+$mode
+
+Mode instruction:
+$modeInstruction
+
+Topic or decision under debate:
+$env:topic
+
+Primary Codex current position:
+$codexPosition
+
+Additional context:
+$contextText
+
+Rules:
+- Be direct and specific, not performatively agreeable.
+- Separate evidence from inference.
+- If a claim needs current facts or external verification, flag it explicitly.
+- Keep the answer useful for the primary Codex session to respond to in the next turn.
+
+Return exactly these sections:
+## $selectedLabel Stance
+## Strongest Agreement
+## Main Disagreement
+## Risks / Missing Evidence
+## Questions For Codex
+## Suggested Next Move
+"@
+
+$bin = Get-CodexBin
+$arguments = @("-a", "never", "exec", "--skip-git-repo-check", "--sandbox", "read-only", "--color", "never")
+if (-not [string]::IsNullOrWhiteSpace($env:model)) {
+  $arguments += @("-m", $env:model)
+}
+$arguments += "-"
+
+$prompt | & $bin @arguments
+exit $LASTEXITCODE
+"###;
+
+const AI_CLI_DEBATE_CLAUDE_WINDOWS_SCRIPT: &str = r###"#!powershell
+$ErrorActionPreference = "Stop"
+$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8NoBom
+[Console]::OutputEncoding = $utf8NoBom
+$OutputEncoding = $utf8NoBom
+$selectedLabel = "Claude"
+
+function Test-CliCandidate {
+  param([string] $Path)
+  return ($Path -and ($Path -notmatch "\\WindowsApps\\") -and (Test-Path -LiteralPath $Path -PathType Leaf))
+}
+
+function Get-ClaudeBin {
+  if (Test-CliCandidate $env:CLAUDE_BIN) {
+    return $env:CLAUDE_BIN
+  }
+
+  $candidates = @()
+  $bases = @()
+  if ($env:APPDATA) {
+    $bases += Join-Path $env:APPDATA "Claude\claude-code"
+  }
+  if ($env:LOCALAPPDATA) {
+    $bases += Join-Path $env:LOCALAPPDATA "Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude-code"
+  }
+
+  foreach ($base in $bases) {
+    if (Test-Path -LiteralPath $base) {
+      $candidates += Get-ChildItem -LiteralPath $base -Recurse -Filter "claude.exe" -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -ExpandProperty FullName
+    }
+  }
+
+  $pathCommands = Get-Command "claude.exe" -All -ErrorAction SilentlyContinue
+  foreach ($pathCommand in $pathCommands) {
+    if ($pathCommand.Source) {
+      $candidates += $pathCommand.Source
+    }
+  }
+
+  foreach ($candidate in $candidates) {
+    if (Test-CliCandidate $candidate) {
+      return $candidate
+    }
+  }
+
+  throw "Claude CLI is not available."
+}
+
+function Get-LanguageInstruction {
+  switch ($env:language) {
+    "en" { "Respond in English." }
+    "original" { "Use the most natural language for the request." }
+    default { "Respond in Turkish." }
+  }
+}
+
+if ([string]::IsNullOrWhiteSpace($env:topic)) {
+  [Console]::Error.WriteLine("topic is required")
+  exit 2
+}
+
+$mode = if ([string]::IsNullOrWhiteSpace($env:mode)) { "critic" } else { $env:mode }
+$modeInstruction = "Challenge Codex's current position, identify weak assumptions, and propose stronger alternatives."
+switch ($mode) {
+  "steelman" {
+    $modeInstruction = "First steelman Codex's position, then explain the best opposing argument."
+  }
+  "judge" {
+    $modeInstruction = "Act as a neutral judge. Compare Codex's position with the strongest counter-position and decide what would change your mind."
+  }
+  "red_team" {
+    $modeInstruction = "Red-team Codex's position professionally. Focus on failure modes, hidden risks, and missing evidence."
+  }
+}
+
+$codexPosition = if ([string]::IsNullOrWhiteSpace($env:codex_position)) {
+  "No Codex position was provided. Infer a reasonable target from the topic and clearly state your assumption."
+} else {
+  $env:codex_position
+}
+$contextText = if ([string]::IsNullOrWhiteSpace($env:context)) {
+  "No additional context was provided."
+} else {
+  $env:context
+}
+
+$prompt = @"
+You are $selectedLabel in a structured debate with the primary Codex session.
+$(Get-LanguageInstruction)
+
+Debate mode:
+$mode
+
+Mode instruction:
+$modeInstruction
+
+Topic or decision under debate:
+$env:topic
+
+Primary Codex current position:
+$codexPosition
+
+Additional context:
+$contextText
+
+Rules:
+- Be direct and specific, not performatively agreeable.
+- Separate evidence from inference.
+- If a claim needs current facts or external verification, flag it explicitly.
+- Keep the answer useful for the primary Codex session to respond to in the next turn.
+
+Return exactly these sections:
+## $selectedLabel Stance
+## Strongest Agreement
+## Main Disagreement
+## Risks / Missing Evidence
+## Questions For Codex
+## Suggested Next Move
+"@
+
+$bin = Get-ClaudeBin
+$arguments = @("-p", $prompt, "--permission-mode", "bypassPermissions")
+if (-not [string]::IsNullOrWhiteSpace($env:model)) {
+  $arguments += @("--model", $env:model)
+}
+
+& $bin @arguments
+exit $LASTEXITCODE
+"###;
 
 const AI_CLI_DEBATE_CLAUDE_SCRIPT: &str = r###"#!/usr/bin/env sh
 set -eu

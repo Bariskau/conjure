@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Conjure — Shell scripts, conjured into MCP tools</title>
 <link rel="canonical" href="https://bariskau.github.io/conjure/" />
-<meta name="description" content="Conjure turns local shell scripts into typed MCP tools your agents can call." />
+<meta name="description" content="Conjure turns local PowerShell or sh scripts into typed MCP tools your agents can call." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://bariskau.github.io/conjure/" />
 <meta property="og:title" content="Conjure — Shell scripts, conjured into MCP tools" />
-<meta property="og:description" content="Turn local shell scripts into typed MCP tools your agents can call." />
+<meta property="og:description" content="Turn local PowerShell or sh scripts into typed MCP tools your agents can call." />
 <meta property="og:image" content="https://bariskau.github.io/conjure/tools.png" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:image" content="https://bariskau.github.io/conjure/tools.png" />
@@ -244,7 +244,7 @@ footer{padding:48px 0 60px;position:relative;z-index:1}
     <div class="wrap">
       <div class="pill"><b>◆ MCP</b> Local-first developer tool</div>
       <h1>Turn shell scripts into <span class="em">MCP tools</span> your agents can call.</h1>
-      <p class="lede">Conjure wraps any shell script in a typed, validated MCP tool — then runs locally so Claude Code, Cursor, Codex and friends can call it safely, with live output and full run history.</p>
+      <p class="lede">Conjure wraps PowerShell scripts on Windows and sh scripts on macOS / Linux in typed, validated MCP tools — then runs locally so Claude Code, Cursor, Codex and friends can call them safely, with live output and full run history.</p>
       <div class="cta">
         <a class="btn btn-primary" href="#cta">Get started — it's local</a>
         <a class="btn btn-ghost" href="#how">See how it works</a>
@@ -293,11 +293,11 @@ footer{padding:48px 0 60px;position:relative;z-index:1}
         <div class="step glass reveal">
           <div class="n">1</div>
           <h3>Paste your script</h3>
-          <p>Drop in any bash script. Conjure keeps it exactly as you wrote it.</p>
-          <pre><span class="com">#!/usr/bin/env bash</span>
-<span class="kw">set</span> -euo pipefail
-<span class="kw">echo</span> <span class="str">"deploying <span class="var">$ENV</span>"</span>
-kubectl apply -f ./<span class="var">$ENV</span></pre>
+          <p>Drop in PowerShell on Windows, or sh on macOS / Linux. Conjure keeps it exactly as you wrote it.</p>
+          <pre><span class="com">#!powershell</span>
+<span class="var">$ErrorActionPreference</span> = <span class="str">"Stop"</span>
+<span class="kw">Write-Output</span> <span class="str">"deploying <span class="var">$env:ENV</span>"</span>
+kubectl apply -f ./<span class="var">$env:ENV</span></pre>
         </div>
         <div class="step glass reveal">
           <div class="n">2</div>
@@ -400,7 +400,7 @@ kubectl apply -f ./<span class="var">$ENV</span></pre>
 
 <script>
 const AGENTS = {
-  "Install": "# macOS / Linux\ncurl -fsSL https://raw.githubusercontent.com/Bariskau/conjure/main/scripts/install.sh | sh\n\n# Windows PowerShell\nirm https://raw.githubusercontent.com/Bariskau/conjure/main/scripts/install.ps1 | iex\n\n# start the UI + API\nconjure",
+  "Install": "# macOS / Linux\ncurl -fsSL https://raw.githubusercontent.com/Bariskau/conjure/main/scripts/install.sh | sh\n\n# Windows PowerShell\nirm https://raw.githubusercontent.com/Bariskau/conjure/main/scripts/install.ps1 | iex\n\n# tool scripts default to PowerShell on Windows and sh elsewhere\n# start the UI + API\nconjure",
   "Claude Code": "# Claude Code uses milliseconds for tool timeout\nclaude mcp add-json conjure '{\"type\":\"stdio\",\"command\":\"conjure\",\"args\":[\"--mcp\"],\"timeout\":1800000}'",
   "Cursor": '// ~/.cursor/mcp.json\n{\n  "mcpServers": {\n    "conjure": {\n      "command": "conjure",\n      "args": ["--mcp"]\n    }\n  }\n}',
   "Codex": '# ~/.codex/config.toml\n# Codex uses seconds for tool timeout\n[mcp_servers.conjure]\ncommand = "conjure"\nargs = ["--mcp"]\nstartup_timeout_sec = 30\ntool_timeout_sec = 1800',
@@ -414,6 +414,7 @@ const AGENTS = {
 const FEATURES = [
   ["▟","Live streaming console","Watch stdout/stderr stream in real time, with the exit code and duration revealed the moment a run finishes."],
   ["◇","Typed params + JSON Schema","Inputs compile to one JSON Schema. The same document validates on the client and the server — no drift."],
+  ["PS","OS-native default shell","Script-body tools run in PowerShell on Windows and sh on macOS / Linux. Seed templates are generated for the current OS."],
   ["▢","Working-directory control","Pin where a script runs, or expose it per call. Required, optional, or locked to a default."],
   ["≡","Full run history","Every call logged with its parameters, streams, exit code, and timing. Filter and replay."],
   ["◈","Enable / disable instantly","Flip a tool off and it vanishes from every connected agent. No redeploy."],
