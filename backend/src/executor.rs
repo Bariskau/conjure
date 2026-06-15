@@ -1,4 +1,4 @@
-use std::{convert::Infallible, process::Stdio, time::Duration};
+use std::{convert::Infallible, env, process::Stdio, time::Duration};
 
 use axum::response::sse::Event;
 use chrono::Utc;
@@ -49,7 +49,10 @@ pub async fn execute_and_log(
     let settings = db.get_settings().await?;
     let plan = build_execution_plan(&tool, &params, working_dir_override.as_deref(), &settings)?;
     let started_at = Utc::now();
-    let result = execute_plan(&tool, &plan, None).await?;
+    let started = Instant::now();
+    let result = execute_plan(&tool, &plan, None)
+        .await
+        .unwrap_or_else(|error| execution_error_result(error, started.elapsed()));
     let finished_at = Utc::now();
 
     db.insert_call_log(NewCallLog {
@@ -83,13 +86,18 @@ pub async fn stream_and_log(
 
     tokio::spawn(async move {
         let started_at = Utc::now();
+        let started = Instant::now();
         let result = execute_plan(&tool, &plan, Some(sender.clone())).await;
         let finished_at = Utc::now();
 
-        let result = match result {
-            Ok(result) => result,
-            Err(error) => execution_error_result(error),
+        let (result, emit_captured_output) = match result {
+            Ok(result) => (result, false),
+            Err(error) => (execution_error_result(error, started.elapsed()), true),
         };
+
+        if emit_captured_output {
+            emit_captured_streams(&sender, &result).await;
+        }
 
         let _ = sender
             .send(StreamPayload {
@@ -138,7 +146,10 @@ async fn execute_plan(
     plan: &ExecutionPlan,
     stream_sender: Option<mpsc::Sender<StreamPayload>>,
 ) -> Result<ExecutionResult, AppError> {
-    let mut command = command_for_tool(tool)?;
+    let ToolCommand {
+        mut command,
+        summary,
+    } = command_for_tool(tool)?;
     command.envs(&plan.env);
     if let Some(working_dir) = &plan.working_dir {
         command.current_dir(working_dir);
@@ -147,7 +158,9 @@ async fn execute_plan(
     command.stderr(Stdio::piped());
     command.kill_on_drop(true);
 
-    let mut child = command.spawn()?;
+    let mut child = command.spawn().map_err(|error| {
+        AppError::Execution(format!("failed to start command `{summary}`: {error}"))
+    })?;
     let stdout = child
         .stdout
         .take()
@@ -199,15 +212,24 @@ async fn execute_plan(
     })
 }
 
-fn command_for_tool(tool: &Tool) -> Result<Command, AppError> {
+struct ToolCommand {
+    command: Command,
+    summary: String,
+}
+
+fn command_for_tool(tool: &Tool) -> Result<ToolCommand, AppError> {
     if let Some(script_body) = tool
         .script_body
         .as_deref()
         .filter(|body| !body.trim().is_empty())
     {
-        let mut command = Command::new("sh");
-        command.arg("-c").arg(script_body);
-        return Ok(command);
+        let (shell, flag) = script_shell();
+        let mut command = Command::new(&shell);
+        command.arg(flag).arg(script_body);
+        return Ok(ToolCommand {
+            command,
+            summary: format!("{shell} {flag} {}", command_preview(script_body)),
+        });
     }
 
     if let Some(script_path) = tool
@@ -215,12 +237,67 @@ fn command_for_tool(tool: &Tool) -> Result<Command, AppError> {
         .as_deref()
         .filter(|path| !path.trim().is_empty())
     {
-        return Ok(Command::new(script_path));
+        return Ok(ToolCommand {
+            command: Command::new(script_path),
+            summary: script_path.to_string(),
+        });
     }
 
     Err(AppError::Validation(
         "tool must include script_body or script_path".to_string(),
     ))
+}
+
+fn script_shell() -> (String, &'static str) {
+    if cfg!(windows) {
+        (
+            env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string()),
+            "/C",
+        )
+    } else {
+        ("sh".to_string(), "-c")
+    }
+}
+
+fn command_preview(command: &str) -> String {
+    const MAX_PREVIEW_CHARS: usize = 160;
+
+    let single_line = command.split_whitespace().collect::<Vec<_>>().join(" ");
+    if single_line.chars().count() <= MAX_PREVIEW_CHARS {
+        return single_line;
+    }
+
+    let preview = single_line
+        .chars()
+        .take(MAX_PREVIEW_CHARS)
+        .collect::<String>();
+    format!("{preview}...")
+}
+
+async fn emit_captured_streams(sender: &mpsc::Sender<StreamPayload>, result: &ExecutionResult) {
+    for line in result.stdout.lines() {
+        let _ = sender
+            .send(StreamPayload {
+                stream: Some(OutputStream::Stdout),
+                data: line.to_string(),
+                exit_code: None,
+                duration_ms: None,
+                status: None,
+            })
+            .await;
+    }
+
+    for line in result.stderr.lines() {
+        let _ = sender
+            .send(StreamPayload {
+                stream: Some(OutputStream::Stderr),
+                data: line.to_string(),
+                exit_code: None,
+                duration_ms: None,
+                status: None,
+            })
+            .await;
+    }
 }
 
 fn read_pipe<R>(
@@ -268,12 +345,12 @@ async fn wait_for_capture(task: JoinHandle<LimitedCapture>) -> LimitedCapture {
         .unwrap_or_else(|error| LimitedCapture::from_error(&error.to_string()))
 }
 
-fn execution_error_result(error: AppError) -> ExecutionResult {
+fn execution_error_result(error: AppError, duration: Duration) -> ExecutionResult {
     ExecutionResult {
         stdout: String::new(),
         stderr: error.to_string(),
         exit_code: None,
-        duration_ms: 0,
+        duration_ms: duration.as_millis() as i64,
         status: ExecutionStatus::Error,
         stdout_truncated: false,
         stderr_truncated: false,
@@ -338,6 +415,30 @@ mod tests {
     use super::*;
     use crate::domain::{ParameterType, ToolParameter, ValidationRules, default_settings};
 
+    fn echo_env_script() -> &'static str {
+        if cfg!(windows) {
+            "echo %name%"
+        } else {
+            "printf '%s' \"$name\""
+        }
+    }
+
+    fn sleep_script() -> &'static str {
+        if cfg!(windows) {
+            "ping -n 2 127.0.0.1 >NUL"
+        } else {
+            "sleep 1"
+        }
+    }
+
+    fn large_output_script() -> &'static str {
+        if cfg!(windows) {
+            "for /L %i in (1,1,700000) do @echo x"
+        } else {
+            "yes x | head -n 700000"
+        }
+    }
+
     fn test_tool(script_body: &str, timeout_ms: i64) -> Tool {
         let tool_id = Uuid::new_v4();
 
@@ -370,22 +471,35 @@ mod tests {
         }
     }
 
+    #[test]
+    fn script_body_uses_native_shell() {
+        let (shell, flag) = script_shell();
+
+        if cfg!(windows) {
+            assert!(shell.ends_with("cmd.exe") || shell.ends_with("cmd"));
+            assert_eq!(flag, "/C");
+        } else {
+            assert_eq!(shell, "sh");
+            assert_eq!(flag, "-c");
+        }
+    }
+
     #[tokio::test]
     async fn parameter_values_are_passed_as_literal_env_vars() {
-        let tool = test_tool("printf '%s' \"$name\"", 1_000);
+        let tool = test_tool(echo_env_script(), 1_000);
         let params = json!({ "name": "; echo injected" });
         let plan =
             build_execution_plan(&tool, &params, None, &default_settings()).expect("valid plan");
 
         let result = execute_plan(&tool, &plan, None).await.expect("execution");
 
-        assert_eq!(result.stdout, "; echo injected\n");
+        assert_eq!(result.stdout.trim_end(), "; echo injected");
         assert_eq!(result.status, ExecutionStatus::Success);
     }
 
     #[tokio::test]
     async fn process_is_marked_timeout_when_limit_is_exceeded() {
-        let tool = test_tool("sleep 1", 25);
+        let tool = test_tool(sleep_script(), 25);
         let plan = build_execution_plan(&tool, &json!({ "name": "x" }), None, &default_settings())
             .expect("valid plan");
 
@@ -396,7 +510,7 @@ mod tests {
 
     #[tokio::test]
     async fn stdout_is_truncated_when_limit_is_exceeded() {
-        let tool = test_tool("yes x | head -n 700000", 5_000);
+        let tool = test_tool(large_output_script(), 5_000);
         let plan = build_execution_plan(&tool, &json!({ "name": "x" }), None, &default_settings())
             .expect("valid plan");
 
